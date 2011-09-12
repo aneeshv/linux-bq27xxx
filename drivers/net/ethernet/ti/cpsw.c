@@ -629,7 +629,7 @@ static void cpsw_slave_open(struct cpsw_slave *slave, struct cpsw_priv *priv)
 
 	slave_port = cpsw_get_slave_port(priv, slave->slave_num);
 	cpsw_ale_add_mcast(priv->ale, priv->ndev->broadcast,
-			   1 << slave_port);
+			   1 << slave_port, 0, 0);
 
 	slave->phy = phy_connect(priv->ndev, slave->data->phy_id,
 				 &cpsw_adjust_link, 0, slave->data->phy_if);
@@ -665,7 +665,7 @@ static void cpsw_init_host_port(struct cpsw_priv *priv)
 			  0);
 			   /* ALE_SECURE); */
 	cpsw_ale_add_mcast(priv->ale, priv->ndev->broadcast,
-			   1 << priv->host_port);
+			   1 << priv->host_port, 0, 0);
 }
 
 static int cpsw_ndo_open(struct net_device *ndev)
