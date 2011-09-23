@@ -23,6 +23,7 @@ struct cpsw_platform_data {
 
 	int	slaves;		/* number of slave cpgmac ports */
 	struct cpsw_slave_data	*slave_data;
+	int	ethtool_slave;	/* Holds which slave attaches to ethtool */
 
 	u32	ale_reg_ofs;	/* address lookup engine reg offset */
 	int	ale_entries;	/* ale table size */

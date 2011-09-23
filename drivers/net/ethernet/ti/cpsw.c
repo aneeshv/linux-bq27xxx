@@ -1011,11 +1011,52 @@ static void cpsw_set_msglevel(struct net_device *ndev, u32 value)
 	priv->msg_enable = value;
 }
 
+/**
+ * cpsw_get_settings: Get EMAC settings
+ * @ndev: CPSW network adapter
+ * @ecmd: ethtool command
+ *
+ * Executes ethool get command
+ *
+ */
+static int cpsw_get_settings(struct net_device *ndev,
+			     struct ethtool_cmd *ecmd)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+	int slave_no = priv->data.ethtool_slave;
+
+	if (priv->slaves[slave_no].phy)
+		return phy_ethtool_gset(priv->slaves[slave_no].phy, ecmd);
+	else
+		return -EOPNOTSUPP;
+}
+
+/**
+ * cpsw_set_settings: Set EMAC settings
+ * @ndev: CPSW network adapter
+ * @ecmd: ethtool command
+ *
+ * Executes ethool set command
+ *
+ */
+static int cpsw_set_settings(struct net_device *ndev, struct ethtool_cmd *ecmd)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+	int slave_no = priv->data.ethtool_slave;
+
+	if (priv->slaves[slave_no].phy)
+		return phy_ethtool_sset(priv->slaves[slave_no].phy, ecmd);
+	else
+		return -EOPNOTSUPP;
+}
+
 static const struct ethtool_ops cpsw_ethtool_ops = {
 	.get_drvinfo	= cpsw_get_drvinfo,
 	.get_msglevel	= cpsw_get_msglevel,
 	.set_msglevel	= cpsw_set_msglevel,
 	.get_link	= ethtool_op_get_link,
+	.get_settings	= cpsw_get_settings,
+	.set_settings	= cpsw_set_settings,
 	.get_coalesce	= cpsw_get_coalesce,
 	.set_coalesce	= cpsw_set_coalesce,
 };
