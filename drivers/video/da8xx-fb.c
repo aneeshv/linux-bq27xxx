@@ -272,6 +272,20 @@ static struct da8xx_panel known_lcd_panels[] = {
 		.pxl_clk = 30000000,
 		.invert_pxl_clk = 0,
 	},
+	[3] = {
+		/* 1024 x 768 @ 60 Hz  Reduced blanking VESA CVT 0.79M3-R */
+		.name = "1024x768@60",
+		.width = 1024,
+		.height = 768,
+		.hfp = 48,
+		.hbp = 80,
+		.hsw = 32,
+		.vfp = 3,
+		.vbp = 15,
+		.vsw = 4,
+		.pxl_clk = 56000000,
+		.invert_pxl_clk = 0,
+	},
 };
 
 /* Enable the Raster Engine of the LCD Controller */
@@ -498,7 +512,7 @@ static int lcd_cfg_display(const struct lcd_ctrl_config *cfg)
 		reg |= LCD_V1_UNDERFLOW_INT_ENA;
 	} else {
 		reg_int = lcdc_read(LCD_INT_ENABLE_SET_REG) |
-			LCD_V2_UNDERFLOW_INT_ENA;
+			LCD_V2_UNDERFLOW_INT_ENA | LCD_SYNC_LOST;
 		lcdc_write(reg_int, LCD_INT_ENABLE_SET_REG);
 	}
 
