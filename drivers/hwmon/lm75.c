@@ -22,6 +22,8 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/jiffies.h>
+#include <linux/input.h>
+#include <linux/workqueue.h>
 #include <linux/i2c.h>
 #include <linux/hwmon.h>
 #include <linux/hwmon-sysfs.h>
@@ -29,6 +31,20 @@
 #include <linux/mutex.h>
 #include "lm75.h"
 
+#define LM75_DEBUG  0
+
+static struct input_dev *lm75_input_dev;
+
+/* Used globally in current driver */
+static int lm75_timeout;
+static bool lm75_enabled;
+
+/* Workqueue related definitions */
+static struct workqueue_struct *lm75_work_q;
+static struct delayed_work lm75_delayed_work;
+
+/* */
+struct device *lm75_i2c_dev;
 
 /*
  * This driver handles the LM75 and compatible digital temperature sensors.
@@ -82,6 +98,156 @@ struct lm75_data {
 static int lm75_read_value(struct i2c_client *client, u8 reg);
 static int lm75_write_value(struct i2c_client *client, u8 reg, u16 value);
 static struct lm75_data *lm75_update_device(struct device *dev);
+
+
+
+static int lm75_work(void)
+{
+	int temperature = 0;
+
+	struct lm75_data *data = lm75_update_device(lm75_i2c_dev);
+
+	temperature = LM75_TEMP_FROM_REG(data->temp[0]);
+
+#if LM75_DEBUG
+	printk(KERN_DEBUG "lm75_work called!! temp=%d\n", temperature);
+#endif
+
+	input_report_abs(lm75_input_dev, ABS_MISC, temperature);
+	input_sync(lm75_input_dev);
+
+	if (lm75_enabled) {
+
+#if LM75_DEBUG
+		printk(KERN_DEBUG "lm75 queuing at delay= %u\n", lm75_timeout);
+#endif
+		queue_delayed_work(lm75_work_q,
+				   &lm75_delayed_work,
+				   lm75_timeout);
+	}
+
+	return 0;
+}
+
+/*-----------------------------------------------------------------------*/
+/* sysfs attributes for input-device */
+
+static ssize_t lm75_poll_delay_show(struct device *dev,
+				    struct device_attribute *attr,
+				    char *buf)
+{
+	long int delay_to_report;
+
+	/* millisecs to nanosecs */
+	delay_to_report = jiffies_to_msecs(lm75_timeout*1000000);
+
+#if LM75_DEBUG
+	printk(KERN_DEBUG "delay_to_report=%ld\n", delay_to_report);
+#endif
+	return snprintf(buf, PAGE_SIZE, "%ld\n", delay_to_report);
+}
+
+
+static ssize_t lm75_poll_delay_store(struct device *dev,
+				     struct device_attribute *attr,
+				     const char *buf,
+				     size_t size)
+{
+	int err;
+	long int new_delay;
+
+#if LM75_DEBUG
+	printk(KERN_DEBUG "buf=%s\n", buf);
+	printk(KERN_DEBUG "size=%u\n", size);
+#endif
+
+	err = kstrtol(buf, 10, &new_delay);
+	if (err < 0)
+		return err;
+
+	/* nanosecs to millisecs */
+	lm75_timeout = msecs_to_jiffies(new_delay/1000000);
+
+
+#ifdef LM75_DEBUG
+	printk(KERN_DEBUG "poll_delay_store new_delay=%ld\n", new_delay);
+	printk(KERN_DEBUG "poll_delay_store lm75_timeout=%d\n", lm75_timeout);
+#endif
+	return size;
+}
+
+
+static ssize_t lm75_enable_show(struct device *dev,
+				struct device_attribute *attr,
+				char *buf)
+{
+#ifdef LM75_DEBUG
+	printk(KERN_DEBUG "enabled=%d\n", lm75_enabled);
+#endif
+	return snprintf(buf, PAGE_SIZE, "%d\n", lm75_enabled);
+}
+
+
+static ssize_t lm75_enable_store(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf,
+				 size_t size)
+{
+	bool new_value;
+
+	if (sysfs_streq(buf, "1"))
+		new_value = true;
+	else if (sysfs_streq(buf, "0"))
+		new_value = false;
+	else {
+		printk(KERN_DEBUG "%s: invalid value %d\n", __func__, *buf);
+		return -EINVAL;
+	}
+
+#if LM75_DEBUG
+	printk(KERN_DEBUG "new=%d,old=%d\n", new_value, lm75_enabled);
+#endif
+
+	if (new_value && !lm75_enabled) {
+		lm75_enabled = true;
+#if LM75_DEBUG
+		printk(KERN_DEBUG "ENABLING TEMP SENSOR\n\n");
+#endif
+		queue_delayed_work(lm75_work_q,
+				   &lm75_delayed_work,
+				   lm75_timeout);
+
+	} else if (!new_value && lm75_enabled) {
+		lm75_enabled = false;
+#if LM75_DEBUG
+		printk(KERN_DEBUG "DISABLING TEMP SENSOR\n\n");
+#endif
+		flush_workqueue(lm75_work_q);
+		cancel_delayed_work(&lm75_delayed_work);
+	}
+
+	return size;
+}
+
+
+static struct device_attribute dev_attr_lm75_poll_delay =
+	__ATTR(poll_delay, S_IRUGO | S_IWUGO | S_IXUGO,
+	       lm75_poll_delay_show, lm75_poll_delay_store);
+
+static struct device_attribute dev_attr_lm75_enable =
+	__ATTR(enable, S_IRUGO | S_IWUGO | S_IXUGO,
+	       lm75_enable_show, lm75_enable_store);
+
+
+static struct attribute *lm75_sysfs_attrs[] = {
+	&dev_attr_lm75_enable.attr,
+	&dev_attr_lm75_poll_delay.attr,
+	NULL
+};
+
+static struct attribute_group lm75_attribute_group = {
+	.attrs = lm75_sysfs_attrs,
+};
 
 
 /*-----------------------------------------------------------------------*/
@@ -184,16 +350,57 @@ lm75_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	if (status)
 		goto exit_free;
 
+	/* allocate lightsensor-level input_device */
+	lm75_input_dev = input_allocate_device();
+	if (!lm75_input_dev) {
+		pr_err("%s: could not allocate input device\n", __func__);
+		status = -ENOMEM;
+		goto exit_input_allocate_device_temp;
+	}
+	set_bit(EV_ABS, lm75_input_dev->evbit);
+	set_bit(ABS_MISC, lm75_input_dev->absbit);
+
+	lm75_input_dev->name = "lm75-temp";
+	input_set_abs_params(lm75_input_dev, ABS_MISC, -55000, 125000, 0, 0);
+
+	status = input_register_device(lm75_input_dev);
+	if (status) {
+
+		printk(KERN_DEBUG "lm75 registration failed: %d\n", status);
+		goto exit_release_input_dev;
+	}
+
+	status = sysfs_create_group(&lm75_input_dev->dev.kobj,
+				    &lm75_attribute_group);
+	if (status) {
+		printk(KERN_DEBUG "%s: could not create sysfs\n", __func__);
+		goto exit_release_input_dev;
+	}
+
+	/* default poll-rate is 200ms */
+	lm75_timeout = msecs_to_jiffies(200);
+
+	/* Workqueue Initialisation */
+	lm75_work_q = create_singlethread_workqueue("lm75_work_queue");
+	INIT_DELAYED_WORK((struct delayed_work *)&lm75_delayed_work, lm75_work);
+
+
 	data->hwmon_dev = hwmon_device_register(&client->dev);
 	if (IS_ERR(data->hwmon_dev)) {
 		status = PTR_ERR(data->hwmon_dev);
 		goto exit_remove;
 	}
 
+	lm75_i2c_dev = &client->dev;
+
 	dev_info(&client->dev, "%s: sensor '%s'\n",
 		 dev_name(data->hwmon_dev), client->name);
 
 	return 0;
+
+exit_release_input_dev:
+	input_free_device(lm75_input_dev);
+exit_input_allocate_device_temp:
 
 exit_remove:
 	sysfs_remove_group(&client->dev.kobj, &lm75_group);
