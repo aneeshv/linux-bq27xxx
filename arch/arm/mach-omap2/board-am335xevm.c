@@ -691,7 +691,7 @@ static const uint32_t am335x_evm_matrix_keys[] = {
 	KEY(2, 0, KEY_LEFT),
 
 	KEY(0, 1, KEY_RIGHT),
-	KEY(1, 1, KEY_ENTER),
+	KEY(1, 1, KEY_POWER),
 	KEY(2, 1, KEY_DOWN),
 };
 
