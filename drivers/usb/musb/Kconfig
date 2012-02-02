@@ -162,10 +162,14 @@ config MUSB_PIO_ONLY
 	  All data is copied between memory and FIFO by the CPU.
 	  DMA controllers are ignored.
 
-	  Do not choose this unless DMA support for your SOC or board
-	  is unavailable (or unstable).  When DMA is enabled at compile time,
-	  you can still disable it at run time using the "use_dma=n" module
-	  parameter.
+	  Select 'y' here if DMA support for your SOC or board
+	  is unavailable (or unstable). On CPPI 4.1 DMA based
+	  systems (AM335x, AM35x, and AM180x) DMA support is
+	  considered unstable and this option should be enabled
+	  in production systems so that DMA is disabled, unless DMA
+	  has been validated for all use cases. When DMA is enabled at
+	  compile time, you can still disable it at run time using the
+	  "use_dma=n" module parameter.
 
 config USB_INVENTRA_DMA
 	bool
