@@ -38,6 +38,8 @@
 #include <linux/input/ti_tscadc.h>
 #include <linux/reboot.h>
 #include <linux/pwm/pwm.h>
+#include <linux/skbuff.h>
+#include <linux/ti_wilink_st.h>
 
 /* LCD controller is similar to DA850 */
 #include <video/da8xx-fb.h>
@@ -1493,8 +1495,74 @@ static void uart1_wl12xx_init(int evm_id, int profile)
 	setup_pin_mux(uart1_wl12xx_pin_mux);
 }
 
+#ifdef CONFIG_TI_ST
+/* TI-ST for WL12xx BT */
+
+int plat_kim_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	/* TODO: wait for HCI-LL sleep */
+	return 0;
+}
+
+int plat_kim_resume(struct platform_device *pdev)
+{
+	return 0;
+}
+
+int plat_kim_chip_enable(struct kim_data_s *kim_data)
+{
+	printk(KERN_INFO"%s\n", __func__);
+
+	gpio_set_value(kim_data->nshutdown, 0);
+	msleep(1);
+	gpio_set_value(kim_data->nshutdown, 1);
+
+	return 0;
+}
+
+int plat_kim_chip_disable(struct kim_data_s *kim_data)
+{
+	printk(KERN_INFO"%s\n", __func__);
+
+	gpio_set_value(kim_data->nshutdown, 0);
+
+	return 0;
+}
+
+struct ti_st_plat_data wilink_pdata = {
+	.nshutdown_gpio = GPIO_TO_PIN(3, 21),
+	.dev_name = "/dev/ttyO1",
+	.flow_cntrl = 1,
+	.baud_rate = 3000000,
+	.suspend = plat_kim_suspend,
+	.resume = plat_kim_resume,
+	.chip_enable = plat_kim_chip_enable,
+	.chip_disable = plat_kim_chip_disable,
+};
+
+static struct platform_device wl12xx_device = {
+	.name		= "kim",
+	.id		= -1,
+	.dev.platform_data = &wilink_pdata,
+};
+
+static struct platform_device btwilink_device = {
+	.name = "btwilink",
+	.id = -1,
+};
+
+static inline void __init am335xevm_init_btwilink(void)
+{
+	pr_info("am335xevm: bt init\n");
+
+	platform_device_register(&wl12xx_device);
+	platform_device_register(&btwilink_device);
+}
+#endif
+
 static void wl12xx_bluetooth_enable(void)
 {
+#ifndef CONFIG_TI_ST
 	int status = gpio_request(am335xevm_wlan_data.bt_enable_gpio,
 		"bt_en\n");
 	if (status < 0)
@@ -1502,6 +1570,9 @@ static void wl12xx_bluetooth_enable(void)
 
 	pr_info("Configure Bluetooth Enable pin...\n");
 	gpio_direction_output(am335xevm_wlan_data.bt_enable_gpio, 0);
+#else
+	am335xevm_init_btwilink();
+#endif
 }
 
 static int wl12xx_set_power(struct device *dev, int slot, int on, int vdd)

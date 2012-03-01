@@ -769,6 +769,7 @@ CONFIG_BT_HCIUART_LL=y
 # CONFIG_BT_HCIBFUSB is not set
 # CONFIG_BT_HCIVHCI is not set
 # CONFIG_BT_MRVL is not set
+CONFIG_BT_WILINK=y
 # CONFIG_AF_RXRPC is not set
 CONFIG_WIRELESS=y
 CONFIG_WIRELESS_EXT=y
@@ -1002,7 +1003,7 @@ CONFIG_EEPROM_AT24=y
 #
 # Texas Instruments shared transport line discipline
 #
-# CONFIG_TI_ST is not set
+CONFIG_TI_ST=y
 # CONFIG_SENSORS_LIS3_SPI is not set
 CONFIG_SENSORS_LIS3_I2C=y
 
@@ -1857,6 +1858,7 @@ CONFIG_USB_VIDEO_CLASS_INPUT_EVDEV=y
 # Graphics support
 #
 # CONFIG_DRM is not set
+# CONFIG_ION is not set
 # CONFIG_VGASTATE is not set
 # CONFIG_VIDEO_OUTPUT_CONTROL is not set
 CONFIG_FB=y
