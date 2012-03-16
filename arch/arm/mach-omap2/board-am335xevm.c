@@ -906,6 +906,65 @@ static void volume_keys_init(int evm_id, int profile)
 		pr_err("failed to register matrix keypad (2x3) device\n");
 }
 
+/* pinmux for LCD cape keypad device */
+static struct pinmux_config lcd_cape_keys_pin_mux[] = {
+	{"gpmc_a0.gpio1_16",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_a1.gpio1_17",    OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_csn2.gpio1_31",    OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{NULL, 0},
+};
+
+/* Configure GPIOs for Volume Keys */
+static struct gpio_keys_button lcd_cape_gpio_buttons[] = {
+	{
+		.code                   = KEY_MENU,
+		.gpio                   = GPIO_TO_PIN(1, 16),
+		.active_low             = true,
+		.desc                   = "menu",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+	{
+		.code                   = KEY_POWER,
+		.gpio                   = GPIO_TO_PIN(1, 17),
+		.active_low             = true,
+		.desc                   = "power",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+	{
+		.code                   = KEY_BACK,
+		.gpio                   = GPIO_TO_PIN(1, 31),
+		.active_low             = true,
+		.desc                   = "back",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+};
+
+static struct gpio_keys_platform_data lcd_cape_gpio_key_info = {
+	.buttons        = lcd_cape_gpio_buttons,
+	.nbuttons       = ARRAY_SIZE(lcd_cape_gpio_buttons),
+};
+
+static struct platform_device lcd_cape_keys = {
+	.name   = "gpio-keys",
+	.id     = -1,
+	.dev    = {
+		.platform_data  = &lcd_cape_gpio_key_info,
+	},
+};
+
+static void lcd_cape_keys_init(int evm_id, int profile)
+{
+	int err;
+
+	setup_pin_mux(lcd_cape_keys_pin_mux);
+	err = platform_device_register(&lcd_cape_keys);
+	if (err)
+		pr_err("failed to register lcd cape keypad device\n");
+}
+
 /*
 * @evm_id - evm id which needs to be configured
 * @dev_cfg - single evm structure which includes
