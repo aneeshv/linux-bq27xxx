@@ -67,6 +67,7 @@ struct tsl2550_data {
 
 	unsigned int power_state:1;
 	unsigned int operating_mode:1;
+	unsigned int enable:1;
 };
 
 /*
@@ -253,6 +254,8 @@ static ssize_t tsl2550_store_power_state(struct device *dev,
 
 	mutex_lock(&data->update_lock);
 	ret = tsl2550_set_power_state(data->client, new_value);
+	/* Save power state for suspend/resume */
+	data->enable = new_value;
 	mutex_unlock(&data->update_lock);
 
 	if (ret < 0)
@@ -633,12 +636,27 @@ static int __devexit tsl2550_remove(struct i2c_client *client)
 
 static int tsl2550_suspend(struct i2c_client *client, pm_message_t mesg)
 {
+	struct tsl2550_data *data = i2c_get_clientdata(client);
+
+	if (data->enable)
+		tsl2550_light_disable(data);
+
 	return tsl2550_set_power_state(client, 0);
 }
 
 static int tsl2550_resume(struct i2c_client *client)
 {
-	return tsl2550_set_power_state(client, 1);
+	int ret;
+	struct tsl2550_data *data = i2c_get_clientdata(client);
+
+	ret = tsl2550_set_power_state(client, 1);
+	if (ret) {
+		/* re-enable input events if required */
+		if(data->enable)
+			tsl2550_light_enable(data);
+	}
+
+	return ret;
 }
 
 #else
