@@ -126,6 +126,9 @@
 #define am335x_tlk110_phy_init() do { } while (0);
 #endif
 
+#define BEAGLEBONE_LCD_AVDD_EN GPIO_TO_PIN(0, 7)
+#define BEAGLEBONE_LCD_BL GPIO_TO_PIN(1, 18)
+
 static const struct display_panel disp_panel = {
 	WVGA,
 	32,
@@ -196,10 +199,23 @@ struct da8xx_lcdc_platform_data TFC_S9700RTWV35TR_01B_pdata = {
 	.type			= "TFC_S9700RTWV35TR_01B",
 };
 
+void cape_panel_power_ctrl (int state)
+{
+	if (state)
+	{
+		gpio_direction_output(BEAGLEBONE_LCD_BL, 1);
+	}
+	else
+	{
+		gpio_direction_output(BEAGLEBONE_LCD_BL, 0);
+	}
+}
+
 struct da8xx_lcdc_platform_data TFC_S9700RTWV35TR_01B_bone_lcd_cape_pdata = {
 	.manu_name		= "ThreeFive",
 	.controller_data	= &bone_lcd_cape_cfg,
 	.type			= "TFC_S9700RTWV35TR_01B",
+	.panel_power_ctrl	= cape_panel_power_ctrl,
 };
 
 #include "common.h"
@@ -1177,8 +1193,6 @@ out:
 	return ret;
 }
 
-#define BEAGLEBONE_LCD_AVDD_EN GPIO_TO_PIN(0, 7)
-#define BEAGLEBONE_LCD_BL GPIO_TO_PIN(1, 18)
 
 static void lcdc_init(int evm_id, int profile)
 {
@@ -1210,13 +1224,14 @@ static void bone_lcdc_init(int evm_id, int profile)
 		return;
 	}
 
-	if (am33xx_register_lcdc(&TFC_S9700RTWV35TR_01B_bone_lcd_cape_pdata))
-		pr_info("Failed to register LCDC device\n");
-
 	gpio_request(BEAGLEBONE_LCD_BL, "BONE_LCD_BL");
 	gpio_direction_output(BEAGLEBONE_LCD_BL, 1);
 	gpio_request(BEAGLEBONE_LCD_AVDD_EN, "BONE_LCD_AVDD_EN");
 	gpio_direction_output(BEAGLEBONE_LCD_AVDD_EN, 1);
+
+	if (am33xx_register_lcdc(&TFC_S9700RTWV35TR_01B_bone_lcd_cape_pdata))
+		pr_info("Failed to register LCDC device\n");
+
 
 	pr_info("Setup LCD display\n");
 	return;
