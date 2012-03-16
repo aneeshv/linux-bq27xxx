@@ -133,6 +133,13 @@ static const struct display_panel disp_panel = {
 	COLOR_ACTIVE,
 };
 
+static const struct display_panel bone_lcd_cape_disp_panel = {
+	WVGA,
+	16,
+	16,
+	COLOR_ACTIVE,
+};
+
 /* LCD backlight platform Data */
 #define AM335X_BACKLIGHT_MAX_BRIGHTNESS        100
 #define AM335X_BACKLIGHT_DEFAULT_BRIGHTNESS    100
@@ -166,9 +173,32 @@ static struct lcd_ctrl_config lcd_cfg = {
 	.raster_order		= 0,
 };
 
+static struct lcd_ctrl_config bone_lcd_cape_cfg = {
+	&bone_lcd_cape_disp_panel,
+	.ac_bias                = 255,
+	.ac_bias_intrpt         = 0,
+	.dma_burst_sz           = 16,
+	.bpp                    = 16,
+	.fdd                    = 0x80,
+	.tft_alt_mode           = 0,
+	.stn_565_mode           = 0,
+	.mono_8bit_mode         = 0,
+	.invert_line_clock      = 1,
+	.invert_frm_clock       = 1,
+	.sync_edge              = 0,
+	.sync_ctrl              = 1,
+	.raster_order           = 0,
+};
+
 struct da8xx_lcdc_platform_data TFC_S9700RTWV35TR_01B_pdata = {
 	.manu_name		= "ThreeFive",
 	.controller_data	= &lcd_cfg,
+	.type			= "TFC_S9700RTWV35TR_01B",
+};
+
+struct da8xx_lcdc_platform_data TFC_S9700RTWV35TR_01B_bone_lcd_cape_pdata = {
+	.manu_name		= "ThreeFive",
+	.controller_data	= &bone_lcd_cape_cfg,
 	.type			= "TFC_S9700RTWV35TR_01B",
 };
 
@@ -414,6 +444,13 @@ static struct pinmux_config haptics_pin_mux[] = {
 		AM33XX_PIN_OUTPUT},
 	{NULL, 0},
 };
+
+/* Module pin mux for LCD Cape. LCDC pinmux already being set */
+static struct pinmux_config lcd_cape_pin_mux[] = {
+	{"gpmc_a2.gpio1_18", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
+	{NULL, 0},
+};
+
 
 /* Module pin mux for LCDC */
 static struct pinmux_config lcdc_pin_mux[] = {
@@ -1037,6 +1074,9 @@ out:
 	return ret;
 }
 
+#define BEAGLEBONE_LCD_AVDD_EN GPIO_TO_PIN(0, 7)
+#define BEAGLEBONE_LCD_BL GPIO_TO_PIN(1, 18)
+
 static void lcdc_init(int evm_id, int profile)
 {
 
@@ -1050,6 +1090,32 @@ static void lcdc_init(int evm_id, int profile)
 
 	if (am33xx_register_lcdc(&TFC_S9700RTWV35TR_01B_pdata))
 		pr_info("Failed to register LCDC device\n");
+	return;
+}
+
+
+static void bone_lcdc_init(int evm_id, int profile)
+{
+
+	pr_info("IN : %s \n", __FUNCTION__);
+	setup_pin_mux(lcd_cape_pin_mux);
+	setup_pin_mux(lcdc_pin_mux);
+
+	if (conf_disp_pll(300000000)) {
+		pr_info("Failed configure display PLL, not attempting to"
+				"register LCDC\n");
+		return;
+	}
+
+	if (am33xx_register_lcdc(&TFC_S9700RTWV35TR_01B_bone_lcd_cape_pdata))
+		pr_info("Failed to register LCDC device\n");
+
+	gpio_request(BEAGLEBONE_LCD_BL, "BONE_LCD_BL");
+	gpio_direction_output(BEAGLEBONE_LCD_BL, 1);
+	gpio_request(BEAGLEBONE_LCD_AVDD_EN, "BONE_LCD_AVDD_EN");
+	gpio_direction_output(BEAGLEBONE_LCD_AVDD_EN, 1);
+
+	pr_info("Setup LCD display\n");
 	return;
 }
 
@@ -1969,7 +2035,6 @@ static struct evm_dev_cfg ip_phn_evm_dev_cfg[] = {
 /* Beaglebone < Rev A3 */
 static struct evm_dev_cfg beaglebone_old_dev_cfg[] = {
 	{rmii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{dvi_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
