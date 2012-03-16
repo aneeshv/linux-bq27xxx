@@ -534,6 +534,12 @@ static int lm75_suspend(struct device *dev)
 {
 	int status;
 	struct i2c_client *client = to_i2c_client(dev);
+
+	if (lm75_enabled) {
+		flush_workqueue(lm75_work_q);
+		cancel_delayed_work(&lm75_delayed_work);
+	}
+
 	status = lm75_read_value(client, LM75_REG_CONF);
 	if (status < 0) {
 		dev_dbg(&client->dev, "Can't read config? %d\n", status);
@@ -555,6 +561,11 @@ static int lm75_resume(struct device *dev)
 	}
 	status = status & ~LM75_SHUTDOWN;
 	lm75_write_value(client, LM75_REG_CONF, status);
+
+	if (lm75_enabled)
+		queue_delayed_work(lm75_work_q,
+				   &lm75_delayed_work,
+				   lm75_timeout);
 	return 0;
 }
 
