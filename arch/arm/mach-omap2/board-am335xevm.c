@@ -1158,6 +1158,21 @@ static void tsc_init(int evm_id, int profile)
 		pr_err("failed to register touchscreen device\n");
 }
 
+static void lcd_cape_tsc_init(int evm_id, int profile)
+{
+	int err;
+
+	pr_info("IN : %s \n", __FUNCTION__);
+	am335x_touchscreen_data.analog_input = 1;
+	setup_pin_mux(tsc_pin_mux);
+	err = am33xx_register_tsc (&am335x_touchscreen_data);
+	if (err)
+		pr_err("failed to register touchscreen device\n");
+
+	pr_info("Setup LCD cape touchscreen\n");
+
+}
+
 static void rgmii1_init(int evm_id, int profile)
 {
 	setup_pin_mux(rgmii1_pin_mux);
