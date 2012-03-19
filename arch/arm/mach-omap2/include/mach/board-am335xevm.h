@@ -19,6 +19,7 @@
 #define BASEBOARD_I2C_ADDR	0x50
 #define DAUG_BOARD_I2C_ADDR	0x51
 #define LCD_BOARD_I2C_ADDR	0x52
+#define LCD_CAPE_I2C_ADDR	0x54
 
 #define LOW_COST_EVM		0
 #define GEN_PURP_EVM		1

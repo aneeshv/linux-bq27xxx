@@ -400,8 +400,52 @@ struct am335x_eeprom_config1 {
 	u8	cpld_ver[8];
 };
 
+/*
+*LCD cape EEPROM config
+*
+*-------------------------------------------------------------------
+*Name		offset	size 	contents
+*--------------------------------------------------------------------
+
+*Header 	0 	4 	0xAA, 0x55, 0x33, 0xEE
+*EEPROM Format
+*
+*Revision	4 	2 	Revision number of the overall format
+*				of this EEPROM in ASCII =A0
+*
+*Board Name 	6 	32 	Name of board in ASCII
+*
+*Version 	38 	4 	Hardware version code for board in ASCII
+*
+*Manufacturer 	42 	16 	ASCII name of the manufacturer
+*
+*Part Number 	60 	16 	ASCII Characters for the part number
+*
+*Number of Pins 74 	2 	Number of pins used by the daughter board
+*
+*Serial Number	76	12	Serial number of the board. This is a 12
+*				character string which is:
+*				WWYY4P13nnnn where:
+*				WW = 2 digit week of the year of production
+*				YY = 2 digit year of production
+*				nnnn = incrementing board number
+*/
+
+struct lcd_cape_eeprom_config {
+	u8	header[4];
+	u8 	revision[2];
+	u8	board_name[32];
+	u8	version[4];
+	u8	manufacturer[16];
+	u8	part_no[16];
+	u8 	no_of_pins[2];
+	u8 	serial_no[12];
+};
+
 static struct am335x_evm_eeprom_config config;
 static struct am335x_eeprom_config1 config1;
+static struct lcd_cape_eeprom_config cape_eeprom_config;
+
 static bool daughter_brd_detected;
 
 #define GP_EVM_REV_IS_1_0		0x1
@@ -1182,20 +1226,23 @@ static void bone_lcdc_init(int evm_id, int profile)
 
 static void dvi_init(int evm_id, int profile)
 {
+	pr_info("IN : %s \n", __FUNCTION__);
 	setup_pin_mux(dvi_pin_mux);
 	gpio_request(BEAGLEBONEDVI_PDn, "DVI_PDn");
 	gpio_direction_output(BEAGLEBONEDVI_PDn, 1);
 
 	/* we are being stupid and setting pixclock
-	from here instead of da8xx-fb.c */
+	   from here instead of da8xx-fb.c */
 	if (conf_disp_pll(560000000)) {
 		pr_info("Failed to set pixclock to 56000000, not attempting to"
-			"register DVI adapter\n");
+				"register DVI adapter\n");
 		return;
 	}
 
 	if (am33xx_register_lcdc(&dvi_pdata))
 		pr_info("Failed to register BeagleBoardToys DVI adapter\n");
+
+	pr_info("Setup DVI display\n");
 	return;
 }
 
@@ -1678,7 +1725,14 @@ static void i2c1_init(int evm_id, int profile)
 }
 
 
+static struct at24_platform_data bone_daughter_board_eeprom_info;
+
 static struct i2c_board_info am335x_i2c_boardinfo2[] = {
+	{
+		/* Daughter Board EEPROM */
+		I2C_BOARD_INFO("24c256", LCD_CAPE_I2C_ADDR),
+		.platform_data  = &bone_daughter_board_eeprom_info,
+	},
 };
 
 static void i2c2_init(int evm_id, int profile)
@@ -2118,7 +2172,6 @@ static struct evm_dev_cfg beaglebone_old_dev_cfg[] = {
 
 /* Beaglebone Rev A3 and after */
 static struct evm_dev_cfg beaglebone_dev_cfg[] = {
-	{dvi_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{tps65217_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
@@ -2241,7 +2294,7 @@ static void am335x_setup_daughter_board(struct memory_accessor *m, void *c)
 		daughter_brd_detected = true;
 	}
 	 else {
-		pr_info("No daughter card found\n");
+		pr_info("No daughter card found on AM335x EVM\n");
 		daughter_brd_detected = false;
 		return;
 	}
@@ -2254,6 +2307,48 @@ static void am335x_setup_daughter_board(struct memory_accessor *m, void *c)
 		pr_err("Unknown CPLD version found, falling back to 1.0A\n");
 		cpld_version = CPLD_REV_1_0A;
 	}
+}
+
+static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
+{
+	int ret;
+
+	/*
+	 * Read from the EEPROM to see the presence
+	 * of daughter board. If present, get daughter board
+	 * specific data.
+	 */
+	pr_info("IN : %s \n", __FUNCTION__);
+	ret = m->read(m, (char *) &cape_eeprom_config, 0,
+			sizeof( struct lcd_cape_eeprom_config));
+
+	if (ret == sizeof (struct lcd_cape_eeprom_config)){
+		pr_info("Detected a daughter card on BeagleBone..");
+	}
+	else {
+		pr_info("No daughter card found on BeagleBone\n");
+	}
+
+	if ( strcmp (cape_eeprom_config.board_name, "BeagleBone LCD Cape") == 0)
+	{
+		pr_info("BeagleBone LCD cape board detected\n");
+		printk ("Board Name: %s\n", cape_eeprom_config.board_name);
+		printk ("manufacurer : %s", cape_eeprom_config.manufacturer);
+		bone_lcdc_init (DEV_ON_DGHTR_BRD, PROFILE_NONE);
+		lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+		lcd_cape_tsc_init ( DEV_ON_DGHTR_BRD, PROFILE_NONE);
+		return;
+	}
+	else{
+		pr_info("Daughter card not supported\n");
+	}
+
+	/* By default setup DVI display if LCD daughter card is not detected.
+	   Display needs to be initialized even if display daughter card is not found so as
+	   to enable framebuffer driver which is needed for successful Android bootup
+	 */
+	dvi_init( DEV_ON_BASEBOARD, PROFILE_NONE);
+	return;
 }
 
 static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
@@ -2360,6 +2455,15 @@ static struct at24_platform_data am335x_baseboard_eeprom_info = {
 	.setup          = am335x_evm_setup,
 	.context        = (void *)NULL,
 };
+
+static struct at24_platform_data bone_daughter_board_eeprom_info = {
+        .byte_len       = (256*1024) / 8,
+        .page_size      = 64,
+        .flags          = AT24_FLAG_ADDR16,
+        .setup          = bone_setup_daughter_board,
+        .context        = (void *)NULL,
+};
+
 
 static struct regulator_init_data am335x_dummy = {
 	.constraints.always_on	= true,
