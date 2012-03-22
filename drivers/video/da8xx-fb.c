@@ -288,6 +288,33 @@ static struct da8xx_panel known_lcd_panels[] = {
 	},
 };
 
+static inline unsigned long RoundUp(unsigned long x, unsigned long y)
+{
+        unsigned long div = x / y;
+        unsigned long rem = x % y;
+
+        return (div + ((rem == 0) ? 0 : 1)) * y;
+}
+
+static unsigned long GCD(unsigned long x, unsigned long y)
+{
+        while (y != 0)
+        {
+                unsigned long r = x % y;
+                x = y;
+                y = r;
+        }
+
+        return x;
+}
+
+static unsigned long LCM(unsigned long x, unsigned long y)
+{
+        unsigned long gcd = GCD(x, y);
+
+        return (gcd == 0) ? 0 : ((x / gcd) * y);
+}
+
 /* Enable the Raster Engine of the LCD Controller */
 static inline void lcd_enable_raster(void)
 {
@@ -1249,6 +1276,7 @@ static int __devinit fb_probe(struct platform_device *device)
 	struct da8xx_fb_par *par;
 	resource_size_t len;
 	int ret, i;
+	unsigned long lcm;
 
 	if (fb_pdata == NULL) {
 		dev_err(&device->dev, "Can not get platform data\n");
@@ -1348,7 +1376,8 @@ static int __devinit fb_probe(struct platform_device *device)
 
 	/* allocate frame buffer */
 	par->vram_size = lcdc_info->width * lcdc_info->height * lcd_cfg->bpp;
-	par->vram_size = PAGE_ALIGN(par->vram_size/8);
+	lcm = LCM((lcdc_info->width * lcd_cfg->bpp)/8, PAGE_SIZE);
+	par->vram_size = RoundUp(par->vram_size/8, lcm);
 	par->vram_size = par->vram_size * LCD_NUM_BUFFERS;
 
 	par->vram_virt = dma_alloc_coherent(NULL,
@@ -1564,8 +1593,10 @@ static int fb_suspend(struct platform_device *dev, pm_message_t state)
 	struct da8xx_fb_par *par = info->par;
 
 	console_lock();
+
 	if (par->panel_power_ctrl)
 		par->panel_power_ctrl(0);
+
 
 	fb_set_suspend(info, 1);
 	lcd_disable_raster(WAIT_FOR_FRAME_DONE);
