@@ -1787,8 +1787,7 @@ static void mmc2_wl12xx_init(int evm_id, int profile)
 
 	am335x_mmc[1].mmc = 3;
 	am335x_mmc[1].name = "wl1271";
-	am335x_mmc[1].caps = MMC_CAP_4_BIT_DATA | MMC_CAP_POWER_OFF_CARD
-				| MMC_PM_KEEP_POWER;
+	am335x_mmc[1].caps = MMC_CAP_4_BIT_DATA | MMC_CAP_POWER_OFF_CARD;
 	am335x_mmc[1].nonremovable = true;
 	am335x_mmc[1].gpio_cd = -EINVAL;
 	am335x_mmc[1].gpio_wp = -EINVAL;
@@ -1886,11 +1885,11 @@ static void wl12xx_bluetooth_enable(void)
 static int wl12xx_set_power(struct device *dev, int slot, int on, int vdd)
 {
 	if (on) {
-		gpio_set_value(am335xevm_wlan_data.wlan_enable_gpio, 1);
+		gpio_direction_output(am335xevm_wlan_data.wlan_enable_gpio, 1);
 		mdelay(70);
 	}
 	else
-		gpio_set_value(am335xevm_wlan_data.wlan_enable_gpio, 0);
+		gpio_direction_output(am335xevm_wlan_data.wlan_enable_gpio, 0);
 
 	return 0;
 }

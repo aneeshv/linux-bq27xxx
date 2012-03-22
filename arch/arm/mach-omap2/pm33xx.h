@@ -42,6 +42,13 @@ struct am33xx_padconf {
 	int	rmii1_refclk;
 	int	mdio_data;
 	int	mdio_clk;
+	/* sdio pads */
+	int	gpmc_a1; 
+	int	gpmc_a2; 
+	int	gpmc_a3; 
+	int	gpmc_ben1;
+	int	gpmc_csn3;
+	int	gpmc_clk;
 };
 #endif /* ASSEMBLER */
 

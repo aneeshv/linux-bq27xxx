@@ -96,6 +96,13 @@ static void save_padconf(void)
 	lp_padconf.mdio_data	= readl(AM33XX_CTRL_REGADDR(0x0948));
 	lp_padconf.mdio_clk	= readl(AM33XX_CTRL_REGADDR(0x094c));
 	gmii_sel		= readl(AM33XX_CTRL_REGADDR(0x0650));
+	/* sdio */
+	lp_padconf.gpmc_a1	= readl(AM33XX_CTRL_REGADDR(0x0844));
+	lp_padconf.gpmc_a2	= readl(AM33XX_CTRL_REGADDR(0x0848));
+	lp_padconf.gpmc_a3	= readl(AM33XX_CTRL_REGADDR(0x084c));
+	lp_padconf.gpmc_ben1	= readl(AM33XX_CTRL_REGADDR(0x0878));
+	lp_padconf.gpmc_csn3	= readl(AM33XX_CTRL_REGADDR(0x0888));
+	lp_padconf.gpmc_clk	= readl(AM33XX_CTRL_REGADDR(0x088c));
 }
 
 static void restore_padconf(void)
@@ -119,6 +126,13 @@ static void restore_padconf(void)
 	writel(lp_padconf.mdio_data, AM33XX_CTRL_REGADDR(0x0948));
 	writel(lp_padconf.mdio_clk, AM33XX_CTRL_REGADDR(0x094c));
 	writel(gmii_sel, AM33XX_CTRL_REGADDR(0x0650));
+	/* sdio */
+	writel(lp_padconf.gpmc_a1, AM33XX_CTRL_REGADDR(0x0844));
+	writel(lp_padconf.gpmc_a2, AM33XX_CTRL_REGADDR(0x0848));
+	writel(lp_padconf.gpmc_a3, AM33XX_CTRL_REGADDR(0x084c));
+	writel(lp_padconf.gpmc_ben1, AM33XX_CTRL_REGADDR(0x0878));
+	writel(lp_padconf.gpmc_csn3, AM33XX_CTRL_REGADDR(0x0888));
+	writel(lp_padconf.gpmc_clk, AM33XX_CTRL_REGADDR(0x088c));
 }
 
 static int am33xx_pm_prepare_late(void)
