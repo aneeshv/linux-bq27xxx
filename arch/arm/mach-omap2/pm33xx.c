@@ -103,6 +103,11 @@ static void save_padconf(void)
 	lp_padconf.gpmc_ben1	= readl(AM33XX_CTRL_REGADDR(0x0878));
 	lp_padconf.gpmc_csn3	= readl(AM33XX_CTRL_REGADDR(0x0888));
 	lp_padconf.gpmc_clk	= readl(AM33XX_CTRL_REGADDR(0x088c));
+	/* uart1 */
+	lp_padconf.uart1_ctsn	= readl(AM33XX_CTRL_REGADDR(0x0978));
+	lp_padconf.uart1_rtsn	= readl(AM33XX_CTRL_REGADDR(0x097C));
+	lp_padconf.uart1_rxd	= readl(AM33XX_CTRL_REGADDR(0x0980));
+	lp_padconf.uart1_txd	= readl(AM33XX_CTRL_REGADDR(0x0984));
 }
 
 static void restore_padconf(void)
@@ -133,6 +138,11 @@ static void restore_padconf(void)
 	writel(lp_padconf.gpmc_ben1, AM33XX_CTRL_REGADDR(0x0878));
 	writel(lp_padconf.gpmc_csn3, AM33XX_CTRL_REGADDR(0x0888));
 	writel(lp_padconf.gpmc_clk, AM33XX_CTRL_REGADDR(0x088c));
+	/* Uart1 */
+	writel(lp_padconf.uart1_ctsn, AM33XX_CTRL_REGADDR(0x0978));
+	writel(lp_padconf.uart1_rtsn, AM33XX_CTRL_REGADDR(0x097C));
+	writel(lp_padconf.uart1_rxd, AM33XX_CTRL_REGADDR(0x0980));
+	writel(lp_padconf.uart1_txd, AM33XX_CTRL_REGADDR(0x0984));
 }
 
 static int am33xx_pm_prepare_late(void)

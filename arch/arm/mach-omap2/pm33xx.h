@@ -49,6 +49,11 @@ struct am33xx_padconf {
 	int	gpmc_ben1;
 	int	gpmc_csn3;
 	int	gpmc_clk;
+	/* uart1 */
+	int	uart1_ctsn;
+	int	uart1_rtsn;
+	int	uart1_rxd;
+	int	uart1_txd;
 };
 #endif /* ASSEMBLER */
 
