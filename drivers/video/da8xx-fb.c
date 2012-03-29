@@ -34,6 +34,7 @@
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
+#include <linux/lcm.h>
 #include <video/da8xx-fb.h>
 #include <asm/mach-types.h>
 
@@ -300,33 +301,6 @@ static struct da8xx_panel known_lcd_panels[] = {
 		.invert_pxl_clk = 0,
 	},
 };
-
-static inline unsigned long RoundUp(unsigned long x, unsigned long y)
-{
-        unsigned long div = x / y;
-        unsigned long rem = x % y;
-
-        return (div + ((rem == 0) ? 0 : 1)) * y;
-}
-
-static unsigned long GCD(unsigned long x, unsigned long y)
-{
-        while (y != 0)
-        {
-                unsigned long r = x % y;
-                x = y;
-                y = r;
-        }
-
-        return x;
-}
-
-static unsigned long LCM(unsigned long x, unsigned long y)
-{
-        unsigned long gcd = GCD(x, y);
-
-        return (gcd == 0) ? 0 : ((x / gcd) * y);
-}
 
 /* Enable the Raster Engine of the LCD Controller */
 static inline void lcd_enable_raster(void)
@@ -1289,7 +1263,7 @@ static int __devinit fb_probe(struct platform_device *device)
 	struct da8xx_fb_par *par;
 	resource_size_t len;
 	int ret, i;
-	unsigned long lcm;
+	unsigned long ulcm;
 
 	if (fb_pdata == NULL) {
 		dev_err(&device->dev, "Can not get platform data\n");
@@ -1389,8 +1363,8 @@ static int __devinit fb_probe(struct platform_device *device)
 
 	/* allocate frame buffer */
 	par->vram_size = lcdc_info->width * lcdc_info->height * lcd_cfg->bpp;
-	lcm = LCM((lcdc_info->width * lcd_cfg->bpp)/8, PAGE_SIZE);
-	par->vram_size = RoundUp(par->vram_size/8, lcm);
+	ulcm = lcm((lcdc_info->width * lcd_cfg->bpp)/8, PAGE_SIZE);
+	par->vram_size = roundup(par->vram_size/8, ulcm);
 	par->vram_size = par->vram_size * LCD_NUM_BUFFERS;
 
 	par->vram_virt = dma_alloc_coherent(NULL,
