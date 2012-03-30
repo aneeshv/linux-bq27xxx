@@ -1818,7 +1818,7 @@ int plat_kim_resume(struct platform_device *pdev)
 
 int plat_kim_chip_enable(struct kim_data_s *kim_data)
 {
-	printk(KERN_INFO"%s\n", __func__);
+	printk(KERN_DEBUG "%s\n", __func__);
 
 	gpio_set_value(kim_data->nshutdown, 0);
 	msleep(1);
@@ -1829,7 +1829,7 @@ int plat_kim_chip_enable(struct kim_data_s *kim_data)
 
 int plat_kim_chip_disable(struct kim_data_s *kim_data)
 {
-	printk(KERN_INFO"%s\n", __func__);
+	printk(KERN_DEBUG "%s\n", __func__);
 
 	gpio_set_value(kim_data->nshutdown, 0);
 

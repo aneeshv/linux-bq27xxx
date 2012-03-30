@@ -232,7 +232,7 @@ static long read_local_version(struct kim_data_s *kim_gdata, char *bts_scr_name)
 	kim_gdata->version.maj_ver = maj_ver;
 	kim_gdata->version.min_ver = min_ver;
 
-	pr_info("%s", bts_scr_name);
+	pr_debug("%s", bts_scr_name);
 	return 0;
 }
 
@@ -252,7 +252,7 @@ void skip_change_remote_baud(unsigned char **ptr, long *len)
 		*len = *len - (sizeof(struct bts_action) +
 				((struct bts_action *)cur_action)->size);
 		/* warn user on not commenting these in firmware */
-		pr_warn("skipping the wait event of change remote baud");
+		pr_debug("skipping the wait event of change remote baud");
 	}
 }
 
@@ -308,7 +308,7 @@ static long download_firmware(struct kim_data_s *kim_gdata)
 			     0xFF36)) {
 				/* ignore remote change
 				 * baud rate HCI VS command */
-				pr_warn("change remote baud"
+				pr_debug("change remote baud"
 				    " rate command in firmware");
 				skip_change_remote_baud(&ptr, &len);
 				break;
@@ -446,7 +446,7 @@ long st_kim_start(void *kim_data)
 	struct ti_st_plat_data	*pdata;
 	struct kim_data_s	*kim_gdata = (struct kim_data_s *)kim_data;
 
-	pr_info(" %s", __func__);
+	pr_debug(" %s", __func__);
 	pdata = kim_gdata->kim_pdev->dev.platform_data;
 
 	do {
@@ -463,7 +463,7 @@ long st_kim_start(void *kim_data)
 		INIT_COMPLETION(kim_gdata->ldisc_installed);
 		/* send notification to UIM */
 		kim_gdata->ldisc_install = 1;
-		pr_info("ldisc_install = 1");
+		pr_debug("ldisc_install = 1");
 		sysfs_notify(&kim_gdata->kim_pdev->dev.kobj,
 				NULL, "install");
 		/* wait for ldisc to be installed */
@@ -472,7 +472,7 @@ long st_kim_start(void *kim_data)
 		if (!err) {	/* timeout */
 			pr_err("line disc installation timed out ");
 			kim_gdata->ldisc_install = 0;
-			pr_info("ldisc_install = 0");
+			pr_debug("ldisc_install = 0");
 			sysfs_notify(&kim_gdata->kim_pdev->dev.kobj,
 					NULL, "install");
 			/* the following wait is never going to be completed,
@@ -485,12 +485,12 @@ long st_kim_start(void *kim_data)
 			continue;
 		} else {
 			/* ldisc installed now */
-			pr_info(" line discipline installed ");
+			pr_debug(" line discipline installed ");
 			err = download_firmware(kim_gdata);
 			if (err != 0) {
 				pr_err("download firmware failed");
 				kim_gdata->ldisc_install = 0;
-				pr_info("ldisc_install = 0");
+				pr_debug("ldisc_install = 0");
 				sysfs_notify(&kim_gdata->kim_pdev->dev.kobj,
 						NULL, "install");
 				/* this wait might be completed, though in the
@@ -527,7 +527,7 @@ long st_kim_stop(void *kim_data)
 	tty_driver_flush_buffer(kim_gdata->core_data->tty);
 
 	/* send uninstall notification to UIM */
-	pr_info("ldisc_install = 0");
+	pr_debug("ldisc_install = 0");
 	kim_gdata->ldisc_install = 0;
 	sysfs_notify(&kim_gdata->kim_pdev->dev.kobj, NULL, "install");
 
