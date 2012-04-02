@@ -129,6 +129,16 @@
 #define BEAGLEBONE_LCD_AVDD_EN GPIO_TO_PIN(0, 7)
 #define BEAGLEBONE_LCD_BL GPIO_TO_PIN(1, 18)
 
+#define AM33XX_CTRL_REGADDR(reg)				\
+		AM33XX_L4_WK_IO_ADDRESS(AM33XX_SCM_BASE + (reg))
+
+/* bit 3: 0 - enable, 1 - disable for pull enable */
+#define AM33XX_PULL_DISA		(1 << 3)
+#define AM33XX_PULL_ENBL		(0 << 3)
+
+int selected_pad;
+int pad_mux_value;
+
 static const struct display_panel disp_panel = {
 	WVGA,
 	32,
@@ -1805,6 +1815,12 @@ static void uart1_wl12xx_init(int evm_id, int profile)
 #ifdef CONFIG_TI_ST
 /* TI-ST for WL12xx BT */
 
+/* Bluetooth Enable PAD for EVM Rev 1.1 and up */
+#define AM33XX_CONTROL_PADCONF_MCASP0_AHCLKX_OFFSET		0x09AC
+
+/* Bluetooth Enable PAD for EVM Rev 1.0 */
+#define AM33XX_CONTROL_PADCONF_GPMC_CSN2_OFFSET			0x0884
+
 int plat_kim_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	/* TODO: wait for HCI-LL sleep */
@@ -1820,9 +1836,19 @@ int plat_kim_chip_enable(struct kim_data_s *kim_data)
 {
 	printk(KERN_DEBUG "%s\n", __func__);
 
-	gpio_set_value(kim_data->nshutdown, 0);
+	/* Configure BT_EN pin so that suspend/resume works correctly on rev 1.1 */
+	selected_pad = AM33XX_CONTROL_PADCONF_MCASP0_AHCLKX_OFFSET;
+	/* Configure BT_EN pin so that suspend/resume works correctly on rev 1.0 */
+	/*selected_pad = AM33XX_CONTROL_PADCONF_GPMC_CSN2_OFFSET;*/
+
+	gpio_direction_output(kim_data->nshutdown, 0);
 	msleep(1);
-	gpio_set_value(kim_data->nshutdown, 1);
+	gpio_direction_output(kim_data->nshutdown, 1);
+
+	/* Enable pullup on the enable pin for keeping BT active during suspend */
+	pad_mux_value = readl(AM33XX_CTRL_REGADDR(selected_pad));
+	pad_mux_value &= (~AM33XX_PULL_DISA);
+	writel(pad_mux_value, AM33XX_CTRL_REGADDR(selected_pad));
 
 	return 0;
 }
@@ -1831,7 +1857,12 @@ int plat_kim_chip_disable(struct kim_data_s *kim_data)
 {
 	printk(KERN_DEBUG "%s\n", __func__);
 
-	gpio_set_value(kim_data->nshutdown, 0);
+	gpio_direction_output(kim_data->nshutdown, 0);
+
+	/* Disable pullup on the enable pin to allow BT shut down during suspend */
+	pad_mux_value = readl(AM33XX_CTRL_REGADDR(selected_pad));
+	pad_mux_value |= AM33XX_PULL_DISA;
+	writel(pad_mux_value, AM33XX_CTRL_REGADDR(selected_pad));
 
 	return 0;
 }
