@@ -1835,6 +1835,7 @@ static void musb_irq_work(struct work_struct *data)
 	if (musb->xceiv->state != musb->old_state) {
 		musb->old_state = musb->xceiv->state;
 		sysfs_notify(&musb->controller->kobj, NULL, "mode");
+		kobject_uevent(&musb->controller->kobj, KOBJ_CHANGE);
 	}
 }
 
