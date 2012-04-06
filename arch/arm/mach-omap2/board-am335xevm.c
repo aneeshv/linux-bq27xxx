@@ -228,6 +228,12 @@ struct da8xx_lcdc_platform_data TFC_S9700RTWV35TR_01B_bone_lcd_cape_pdata = {
 	.panel_power_ctrl	= cape_panel_power_ctrl,
 };
 
+struct da8xx_lcdc_platform_data Sharp_LCD035Q3DG01_pdata = {
+	.manu_name		= "Sharp",
+	.controller_data	= &lcd_cfg,
+	.type			= "Sharp_LCD035Q3DG01",
+};
+
 #include "common.h"
 
 #include <linux/lis3lv02d.h>
@@ -1244,6 +1250,20 @@ static void bone_lcdc_init(int evm_id, int profile)
 
 
 	pr_info("Setup LCD display\n");
+	return;
+}
+
+static void vnc_lcdc_init(int evm_id, int profile)
+{
+	setup_pin_mux(lcdc_pin_mux);
+
+	if (conf_disp_pll(300000000)) {
+		pr_info("Failed configure display PLL, not attempting to"
+				"register LCDC\n");
+		return;
+	}
+	if (am33xx_register_lcdc(&Sharp_LCD035Q3DG01_pdata))
+		pr_info("Failed to register LCDC device\n");
 	return;
 }
 
@@ -2367,32 +2387,32 @@ static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
 	ret = m->read(m, (char *) &cape_eeprom_config, 0,
 			sizeof( struct lcd_cape_eeprom_config));
 
-	if (ret == sizeof (struct lcd_cape_eeprom_config)){
-		pr_info("Detected a daughter card on BeagleBone..");
-	}
-	else {
-		pr_info("No daughter card found on BeagleBone\n");
-	}
-
-	if ( strcmp (cape_eeprom_config.board_name, "BeagleBone LCD Cape") == 0)
+	if (ret == sizeof (struct lcd_cape_eeprom_config))
 	{
-		pr_info("BeagleBone LCD cape board detected\n");
-		printk ("Board Name: %s\n", cape_eeprom_config.board_name);
-		printk ("manufacurer : %s", cape_eeprom_config.manufacturer);
-		bone_lcdc_init (DEV_ON_DGHTR_BRD, PROFILE_NONE);
-		lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
-		lcd_cape_tsc_init ( DEV_ON_DGHTR_BRD, PROFILE_NONE);
-		return;
-	}
-	else{
-		pr_info("Daughter card not supported\n");
+		pr_info("Detected a daughter card on BeagleBone..");
+
+		if ( strcmp (cape_eeprom_config.board_name, "BeagleBone LCD Cape") == 0)
+		{
+			pr_info("BeagleBone LCD cape board detected\n");
+			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
+			printk ("manufacurer : %s", cape_eeprom_config.manufacturer);
+			bone_lcdc_init (DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			lcd_cape_tsc_init ( DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			return;
+		}
+		else{
+			/* Setup DVI display if daughter card detected is not LCD cape. */
+			dvi_init( DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			return;
+		}
 	}
 
-	/* By default setup DVI display if LCD daughter card is not detected.
-	   Display needs to be initialized even if display daughter card is not found so as
-	   to enable framebuffer driver which is needed for successful Android bootup
+	/* Display needs to be initialized even if display daughter card is not found so as
+	 * to enable framebuffer driver which is needed for successful Android bootup
 	 */
-	dvi_init( DEV_ON_BASEBOARD, PROFILE_NONE);
+	pr_info("No daughter card found on BeagleBone\n");
+	vnc_lcdc_init (DEV_ON_BASEBOARD, PROFILE_NONE);
 	return;
 }
 
