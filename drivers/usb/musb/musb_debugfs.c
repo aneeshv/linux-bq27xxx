@@ -203,10 +203,10 @@ static ssize_t musb_test_mode_write(struct file *file,
 		test = MUSB_TEST_FIFO_ACCESS;
 
 	if (!strncmp(buf, "force full-speed", 15))
-		test = MUSB_TEST_FORCE_FS;
+		test = MUSB_TEST_FORCE_FS | MUSB_TEST_FORCE_HOST;
 
 	if (!strncmp(buf, "force high-speed", 15))
-		test = MUSB_TEST_FORCE_HS;
+		test = MUSB_TEST_FORCE_HS | MUSB_TEST_FORCE_HOST;
 
 	if (!strncmp(buf, "test packet", 10)) {
 		test = MUSB_TEST_PACKET;

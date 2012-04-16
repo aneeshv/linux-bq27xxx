@@ -218,6 +218,13 @@ config USB_TEST
 	  See <http://www.linux-usb.org/usbtest/> for more information,
 	  including sample test device firmware and "how to use it".
 
+config USB_OTG_EH_TEST
+	tristate "USB OTG & EH Test Mode Support driver"
+	depends on USB && USB_SUSPEND
+	help
+	  This driver is for running tests define on OTG & Embedded Host
+	  Specification.
+
 config USB_ISIGHTFW
 	tristate "iSight firmware loading support"
 	depends on USB
