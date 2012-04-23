@@ -2363,7 +2363,8 @@ static void setup_beaglebone_old(void)
 	/* Beagle Bone has Micro-SD slot which doesn't have Write Protect pin */
 	am335x_mmc[0].gpio_wp = -EINVAL;
 
-	_configure_device(LOW_COST_EVM, beaglebone_old_dev_cfg, PROFILE_NONE);
+	_configure_device(BEAGLE_BONE_OLD, beaglebone_old_dev_cfg,
+								PROFILE_NONE);
 
 	phy_register_fixup_for_uid(BBB_PHY_ID, BBB_PHY_MASK,
 					beaglebone_phy_fixup);
@@ -2380,7 +2381,7 @@ static void setup_beaglebone(void)
 	/* Beagle Bone has Micro-SD slot which doesn't have Write Protect pin */
 	am335x_mmc[0].gpio_wp = -EINVAL;
 
-	_configure_device(LOW_COST_EVM, beaglebone_dev_cfg, PROFILE_NONE);
+	_configure_device(BEAGLE_BONE_A3, beaglebone_dev_cfg, PROFILE_NONE);
 
 	/* TPS65217 regulator has full constraints */
 	regulator_has_full_constraints();
