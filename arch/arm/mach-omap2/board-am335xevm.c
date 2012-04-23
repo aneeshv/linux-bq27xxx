@@ -2245,22 +2245,6 @@ static struct evm_dev_cfg ind_auto_mtrl_evm_dev_cfg[] = {
 	{NULL, 0, 0},
 };
 
-/* IP-Phone EVM */
-static struct evm_dev_cfg ip_phn_evm_dev_cfg[] = {
-	{enable_ecap0,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{lcdc_init,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{tsc_init,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{rgmii2_init,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{evm_nand_init, DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{i2c1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{mcasp1_init,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{NULL, 0, 0},
-};
-
 /* Beaglebone < Rev A3 */
 static struct evm_dev_cfg beaglebone_old_dev_cfg[] = {
 	{rmii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
@@ -2328,13 +2312,6 @@ static void setup_ind_auto_motor_ctrl_evm(void)
 	am335x_tlk110_phy_init();
 
 
-}
-
-static void setup_ip_phone_evm(void)
-{
-	pr_info("The board is an IP phone EVM\n");
-
-	_configure_device(IP_PHN_EVM, ip_phn_evm_dev_cfg, PROFILE_NONE);
 }
 
 /* BeagleBone < Rev A3 */
@@ -2500,8 +2477,6 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 			setup_general_purpose_evm();
 		else if (!strncmp("SKU#02", config.opt, 6))
 			setup_ind_auto_motor_ctrl_evm();
-		else if (!strncmp("SKU#03", config.opt, 6))
-			setup_ip_phone_evm();
 		else
 			goto out;
 	}
