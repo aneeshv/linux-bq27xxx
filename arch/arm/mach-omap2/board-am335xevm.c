@@ -2155,6 +2155,11 @@ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 	{NULL, 0, 0},
 };
 
+/* EVM - Starter Kit */
+static struct evm_dev_cfg evm_sk_dev_cfg[] = {
+	{NULL, 0, 0},
+};
+
 static void setup_general_purpose_evm(void)
 {
 	u32 prof_sel = am335x_get_profile_selection();
@@ -2234,6 +2239,13 @@ static void setup_beaglebone(void)
 	am33xx_evmid_fillup(BEAGLE_BONE_A3);
 }
 
+/* EVM - Starter Kit */
+static void setup_starterkit(void)
+{
+	pr_info("The board is a AM335x Starter Kit.\n");
+
+	_configure_device(EVM_SK, evm_sk_dev_cfg, PROFILE_NONE);
+}
 
 static void am335x_setup_daughter_board(struct memory_accessor *m, void *c)
 {
@@ -2353,6 +2365,9 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 			setup_beaglebone_old();
 		else
 			setup_beaglebone();
+	} else if (!strncmp("A335X_SK", config.name, 8)) {
+		daughter_brd_detected = false;
+		setup_starterkit();
 	} else {
 		/* only 6 characters of options string used for now */
 		snprintf(tmp, 7, "%s", config.opt);

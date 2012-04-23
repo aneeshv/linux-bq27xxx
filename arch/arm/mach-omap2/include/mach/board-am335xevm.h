@@ -25,6 +25,7 @@
 #define IND_AUT_MTR_EVM		1
 #define BEAGLE_BONE_OLD		2
 #define BEAGLE_BONE_A3		3
+#define EVM_SK			4
 
 /* REVIST : check posibility of PROFILE_(x) syntax usage */
 #define PROFILE_NONE	-1	/* Few EVM doesn't have profiles */
