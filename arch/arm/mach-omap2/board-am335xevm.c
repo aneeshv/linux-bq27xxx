@@ -370,11 +370,10 @@ static struct omap_board_config_kernel am335x_evm_config[] __initdata = {
 *  Header		4	0xAA, 0x55, 0x33, 0xEE
 *
 *  Board Name		8	Name for board in ASCII.
-*				example "A33515BB" = "AM335X
-				Low Cost EVM board"
+*				Example "A33515BB" = "AM335x 15x15 Base Board"
 *
-*  Version		4	Hardware version code for board in
-*				in ASCII. "1.0A" = rev.01.0A
+*  Version		4	Hardware version code for board	in ASCII.
+*				"1.0A" = rev.01.0A
 *
 *  Serial Number	12	Serial number of the board. This is a 12
 *				character string which is WWYY4P16nnnn, where
@@ -385,8 +384,7 @@ static struct omap_board_config_kernel am335x_evm_config[] __initdata = {
 *  Configuration option	32	Codes(TBD) to show the configuration
 *				setup on this board.
 *
-*  Available		32720	Available space for other non-volatile
-*				data.
+*  Available		32720	Available space for other non-volatile data.
 */
 struct am335x_evm_eeprom_config {
 	u32	header;
@@ -2199,15 +2197,6 @@ static void profibus_init(int evm_id, int profile)
 	return;
 }
 
-/* Low-Cost EVM */
-static struct evm_dev_cfg low_cost_evm_dev_cfg[] = {
-	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{evm_nand_init, DEV_ON_BASEBOARD, PROFILE_NONE},
-	{NULL, 0, 0},
-};
-
 /* General Purpose EVM */
 static struct evm_dev_cfg gen_purp_evm_dev_cfg[] = {
 	{enable_ecap0,	DEV_ON_DGHTR_BRD, (PROFILE_0 | PROFILE_1 |
@@ -2292,13 +2281,6 @@ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 	{i2c2_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{NULL, 0, 0},
 };
-
-static void setup_low_cost_evm(void)
-{
-	pr_info("The board is a AM335x Low Cost EVM.\n");
-
-	_configure_device(LOW_COST_EVM, low_cost_evm_dev_cfg, PROFILE_NONE);
-}
 
 static void setup_general_purpose_evm(void)
 {
@@ -2514,9 +2496,7 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 		snprintf(tmp, 7, "%s", config.opt);
 		pr_info("SKU: %s\n", tmp);
 
-		if (!strncmp("SKU#00", config.opt, 6))
-			setup_low_cost_evm();
-		else if (!strncmp("SKU#01", config.opt, 6))
+		if (!strncmp("SKU#01", config.opt, 6))
 			setup_general_purpose_evm();
 		else if (!strncmp("SKU#02", config.opt, 6))
 			setup_ind_auto_motor_ctrl_evm();
@@ -2703,8 +2683,8 @@ static void evm_init_cpld(void)
 
 static void __init am335x_evm_i2c_init(void)
 {
-	/* Initially assume Low Cost EVM Config */
-	am335x_evm_id = LOW_COST_EVM;
+	/* Initially assume General Purpose EVM Config */
+	am335x_evm_id = GEN_PURP_EVM;
 
 	evm_init_cpld();
 

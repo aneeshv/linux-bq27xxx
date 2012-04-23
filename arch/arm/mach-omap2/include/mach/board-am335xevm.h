@@ -21,12 +21,11 @@
 #define LCD_BOARD_I2C_ADDR	0x52
 #define LCD_CAPE_I2C_ADDR	0x54
 
-#define LOW_COST_EVM		0
-#define GEN_PURP_EVM		1
-#define IND_AUT_MTR_EVM		2
-#define IP_PHN_EVM		3
-#define BEAGLE_BONE_OLD		4
-#define BEAGLE_BONE_A3		5
+#define GEN_PURP_EVM		0
+#define IND_AUT_MTR_EVM		1
+#define IP_PHN_EVM		2
+#define BEAGLE_BONE_OLD		3
+#define BEAGLE_BONE_A3		4
 
 /* REVIST : check posibility of PROFILE_(x) syntax usage */
 #define PROFILE_NONE	-1	/* Few EVM doesn't have profiles */
