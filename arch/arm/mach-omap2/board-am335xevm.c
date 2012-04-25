@@ -72,61 +72,9 @@
 /* Convert GPIO signal to GPIO pin number */
 #define GPIO_TO_PIN(bank, gpio) (32 * (bank) + (gpio))
 
-/* TLK PHY IDs */
-#define TLK110_PHY_ID		0x2000A201
-#define TLK110_PHY_MASK		0xfffffff0
-
 /* BBB PHY IDs */
 #define BBB_PHY_ID		0x7c0f1
 #define BBB_PHY_MASK		0xfffffffe
-
-/* TLK110 PHY register offsets */
-#define TLK110_COARSEGAIN_REG	0x00A3
-#define TLK110_LPFHPF_REG	0x00AC
-#define TLK110_SPAREANALOG_REG	0x00B9
-#define TLK110_VRCR_REG		0x00D0
-#define TLK110_SETFFE_REG	0x0107
-#define TLK110_FTSP_REG		0x0154
-#define TLK110_ALFATPIDL_REG	0x002A
-#define TLK110_PSCOEF21_REG	0x0096
-#define TLK110_PSCOEF3_REG	0x0097
-#define TLK110_ALFAFACTOR1_REG	0x002C
-#define TLK110_ALFAFACTOR2_REG	0x0023
-#define TLK110_CFGPS_REG	0x0095
-#define TLK110_FTSPTXGAIN_REG	0x0150
-#define TLK110_SWSCR3_REG	0x000B
-#define TLK110_SCFALLBACK_REG	0x0040
-#define TLK110_PHYRCR_REG	0x001F
-
-/* TLK110 register writes values */
-#define TLK110_COARSEGAIN_VAL	0x0000
-#define TLK110_LPFHPF_VAL	0x8000
-#define TLK110_SPANALOG_VAL	0x0000
-#define TLK110_VRCR_VAL		0x0008
-#define TLK110_SETFFE_VAL	0x0605
-#define TLK110_FTSP_VAL		0x0255
-#define TLK110_ALFATPIDL_VAL	0x7998
-#define TLK110_PSCOEF21_VAL	0x3A20
-#define TLK110_PSCOEF3_VAL	0x003F
-#define TLK110_ALFACTOR1_VAL	0xFF80
-#define TLK110_ALFACTOR2_VAL	0x021C
-#define TLK110_CFGPS_VAL	0x0000
-#define TLK110_FTSPTXGAIN_VAL	0x6A88
-#define TLK110_SWSCR3_VAL	0x0000
-#define TLK110_SCFALLBACK_VAL	0xC11D
-#define TLK110_PHYRCR_VAL	0x4000
-
-#if defined(CONFIG_TLK110_WORKAROUND) || \
-		defined(CONFIG_TLK110_WORKAROUND_MODULE)
-#define am335x_tlk110_phy_init()\
-	do {	\
-		phy_register_fixup_for_uid(TLK110_PHY_ID,\
-					TLK110_PHY_MASK,\
-					am335x_tlk110_phy_fixup);\
-	} while (0);
-#else
-#define am335x_tlk110_phy_init() do { } while (0);
-#endif
 
 #define BEAGLEBONE_LCD_AVDD_EN GPIO_TO_PIN(0, 7)
 #define BEAGLEBONE_LCD_BL GPIO_TO_PIN(1, 18)
@@ -2141,65 +2089,6 @@ static int beaglebone_phy_fixup(struct phy_device *phydev)
 	return 0;
 }
 
-#if defined(CONFIG_TLK110_WORKAROUND) || \
-			defined(CONFIG_TLK110_WORKAROUND_MODULE)
-static int am335x_tlk110_phy_fixup(struct phy_device *phydev)
-{
-	unsigned int val;
-
-	/* This is done as a workaround to support TLK110 rev1.0 phy */
-	val = phy_read(phydev, TLK110_COARSEGAIN_REG);
-	phy_write(phydev, TLK110_COARSEGAIN_REG, (val | TLK110_COARSEGAIN_VAL));
-
-	val = phy_read(phydev, TLK110_LPFHPF_REG);
-	phy_write(phydev, TLK110_LPFHPF_REG, (val | TLK110_LPFHPF_VAL));
-
-	val = phy_read(phydev, TLK110_SPAREANALOG_REG);
-	phy_write(phydev, TLK110_SPAREANALOG_REG, (val | TLK110_SPANALOG_VAL));
-
-	val = phy_read(phydev, TLK110_VRCR_REG);
-	phy_write(phydev, TLK110_VRCR_REG, (val | TLK110_VRCR_VAL));
-
-	val = phy_read(phydev, TLK110_SETFFE_REG);
-	phy_write(phydev, TLK110_SETFFE_REG, (val | TLK110_SETFFE_VAL));
-
-	val = phy_read(phydev, TLK110_FTSP_REG);
-	phy_write(phydev, TLK110_FTSP_REG, (val | TLK110_FTSP_VAL));
-
-	val = phy_read(phydev, TLK110_ALFATPIDL_REG);
-	phy_write(phydev, TLK110_ALFATPIDL_REG, (val | TLK110_ALFATPIDL_VAL));
-
-	val = phy_read(phydev, TLK110_PSCOEF21_REG);
-	phy_write(phydev, TLK110_PSCOEF21_REG, (val | TLK110_PSCOEF21_VAL));
-
-	val = phy_read(phydev, TLK110_PSCOEF3_REG);
-	phy_write(phydev, TLK110_PSCOEF3_REG, (val | TLK110_PSCOEF3_VAL));
-
-	val = phy_read(phydev, TLK110_ALFAFACTOR1_REG);
-	phy_write(phydev, TLK110_ALFAFACTOR1_REG, (val | TLK110_ALFACTOR1_VAL));
-
-	val = phy_read(phydev, TLK110_ALFAFACTOR2_REG);
-	phy_write(phydev, TLK110_ALFAFACTOR2_REG, (val | TLK110_ALFACTOR2_VAL));
-
-	val = phy_read(phydev, TLK110_CFGPS_REG);
-	phy_write(phydev, TLK110_CFGPS_REG, (val | TLK110_CFGPS_VAL));
-
-	val = phy_read(phydev, TLK110_FTSPTXGAIN_REG);
-	phy_write(phydev, TLK110_FTSPTXGAIN_REG, (val | TLK110_FTSPTXGAIN_VAL));
-
-	val = phy_read(phydev, TLK110_SWSCR3_REG);
-	phy_write(phydev, TLK110_SWSCR3_REG, (val | TLK110_SWSCR3_VAL));
-
-	val = phy_read(phydev, TLK110_SCFALLBACK_REG);
-	phy_write(phydev, TLK110_SCFALLBACK_REG, (val | TLK110_SCFALLBACK_VAL));
-
-	val = phy_read(phydev, TLK110_PHYRCR_REG);
-	phy_write(phydev, TLK110_PHYRCR_REG, (val | TLK110_PHYRCR_VAL));
-
-	return 0;
-}
-#endif
-
 static void profibus_init(int evm_id, int profile)
 {
 	setup_pin_mux(profibus_pin_mux);
@@ -2316,10 +2205,6 @@ static void setup_ind_auto_motor_ctrl_evm(void)
 
 	/* Fillup global evmid */
 	am33xx_evmid_fillup(IND_AUT_MTR_EVM);
-
-	/* Initialize TLK110 PHY registers for phy version 1.0 */
-	am335x_tlk110_phy_init();
-
 
 }
 
