@@ -284,6 +284,19 @@ static struct da8xx_panel known_lcd_panels[] = {
 		.vbp = 15,
 		.vsw = 4,
 		.pxl_clk = 56000000,
+	},
+	/* Newhaven Display */
+	[4] = {
+		.name = "NHD-4.3-ATXI#-T-1",
+		.width = 480,
+		.height = 272,
+		.hfp = 8,
+		.hbp = 43,
+		.hsw = 4,
+		.vfp = 4,
+		.vbp = 12,
+		.vsw = 10,
+		.pxl_clk = 9000000,
 		.invert_pxl_clk = 0,
 	},
 };
