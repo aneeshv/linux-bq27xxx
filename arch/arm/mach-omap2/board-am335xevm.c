@@ -2159,6 +2159,8 @@ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 /* EVM - Starter Kit */
 static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{rgmii2_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
