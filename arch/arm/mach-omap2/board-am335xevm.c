@@ -184,6 +184,12 @@ struct da8xx_lcdc_platform_data Sharp_LCD035Q3DG01_pdata = {
 	.type			= "Sharp_LCD035Q3DG01",
 };
 
+struct da8xx_lcdc_platform_data  NHD_480272MF_ATXI_pdata = {
+	.manu_name              = "NHD",
+	.controller_data        = &lcd_cfg,
+	.type                   = "NHD-4.3-ATXI#-T-1",
+};
+
 #include "common.h"
 
 #include <linux/lis3lv02d.h>
@@ -1169,7 +1175,7 @@ out:
 
 static void lcdc_init(int evm_id, int profile)
 {
-
+	struct da8xx_lcdc_platform_data *lcdc_pdata;
 	setup_pin_mux(lcdc_pin_mux);
 
 	if (conf_disp_pll(300000000)) {
@@ -1177,9 +1183,21 @@ static void lcdc_init(int evm_id, int profile)
 				"register LCDC\n");
 		return;
 	}
+	switch (evm_id) {
+	case GEN_PURP_EVM:
+		lcdc_pdata = &TFC_S9700RTWV35TR_01B_pdata;
+		break;
+	case EVM_SK:
+		lcdc_pdata = &NHD_480272MF_ATXI_pdata;
+		break;
+	default:
+		pr_err("LCDC not supported on this evm (%d)\n",evm_id);
+		return;
+	}
 
-	if (am33xx_register_lcdc(&TFC_S9700RTWV35TR_01B_pdata))
+	if (am33xx_register_lcdc(lcdc_pdata))
 		pr_info("Failed to register LCDC device\n");
+
 	return;
 }
 
@@ -2161,6 +2179,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{rgmii2_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{lcdc_init,     DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
