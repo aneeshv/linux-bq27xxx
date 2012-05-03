@@ -2031,9 +2031,18 @@ static void d_can_init(int evm_id, int profile)
 
 static void mmc0_init(int evm_id, int profile)
 {
-	setup_pin_mux(mmc0_common_pin_mux);
-	setup_pin_mux(mmc0_wp_only_pin_mux);
-	setup_pin_mux(mmc0_cd_only_pin_mux);
+	switch (evm_id) {
+	case BEAGLE_BONE_A3:
+	case BEAGLE_BONE_OLD:
+		setup_pin_mux(mmc0_common_pin_mux);
+		setup_pin_mux(mmc0_cd_only_pin_mux);
+		break;
+	default:
+		setup_pin_mux(mmc0_common_pin_mux);
+		setup_pin_mux(mmc0_cd_only_pin_mux);
+		setup_pin_mux(mmc0_wp_only_pin_mux);
+		break;
+	}
 
 	omap2_hsmmc_init(am335x_mmc);
 	return;
