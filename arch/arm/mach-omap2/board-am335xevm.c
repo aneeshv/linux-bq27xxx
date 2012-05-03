@@ -1780,6 +1780,11 @@ static void mmc1_init(int evm_id, int profile)
 	return;
 }
 
+static void mmc1_wl12xx_init(int evm_id, int profile)
+{
+	setup_pin_mux(mmc1_common_pin_mux);
+}
+
 static void mmc2_wl12xx_init(int evm_id, int profile)
 {
 	setup_pin_mux(mmc2_wl12xx_pin_mux);
@@ -2176,6 +2181,7 @@ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 
 /* EVM - Starter Kit */
 static struct evm_dev_cfg evm_sk_dev_cfg[] = {
+	{mmc1_wl12xx_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{rgmii2_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
