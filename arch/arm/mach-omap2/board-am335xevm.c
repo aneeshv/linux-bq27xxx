@@ -1973,6 +1973,7 @@ static void mmc0_init(int evm_id, int profile)
 	switch (evm_id) {
 	case BEAGLE_BONE_A3:
 	case BEAGLE_BONE_OLD:
+	case EVM_SK:
 		setup_pin_mux(mmc0_common_pin_mux);
 		setup_pin_mux(mmc0_cd_only_pin_mux);
 		break;
@@ -2157,6 +2158,7 @@ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 
 /* EVM - Starter Kit */
 static struct evm_dev_cfg evm_sk_dev_cfg[] = {
+	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
@@ -2243,6 +2245,9 @@ static void setup_beaglebone(void)
 static void setup_starterkit(void)
 {
 	pr_info("The board is a AM335x Starter Kit.\n");
+
+	/* Starter Kit has Micro-SD slot which doesn't have Write Protect pin */
+	am335x_mmc[0].gpio_wp = -EINVAL;
 
 	_configure_device(EVM_SK, evm_sk_dev_cfg, PROFILE_NONE);
 }
