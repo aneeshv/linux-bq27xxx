@@ -779,42 +779,51 @@ static struct pinmux_config mcasp1_pin_mux[] = {
 
 
 /* Module pin mux for mmc0 */
-static struct pinmux_config mmc0_pin_mux[] = {
+static struct pinmux_config mmc0_common_pin_mux[] = {
 	{"mmc0_dat3.mmc0_dat3",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
 	{"mmc0_dat2.mmc0_dat2",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
 	{"mmc0_dat1.mmc0_dat1",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
 	{"mmc0_dat0.mmc0_dat0",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
 	{"mmc0_clk.mmc0_clk",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
 	{"mmc0_cmd.mmc0_cmd",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
+	{NULL, 0},
+};
+
+static struct pinmux_config mmc0_wp_only_pin_mux[] = {
 	{"mcasp0_aclkr.mmc0_sdwp", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
+	{NULL, 0},
+};
+
+static struct pinmux_config mmc0_cd_only_pin_mux[] = {
 	{"spi0_cs1.mmc0_sdcd",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
 	{NULL, 0},
 };
 
-static struct pinmux_config mmc0_no_cd_pin_mux[] = {
-	{"mmc0_dat3.mmc0_dat3",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_dat2.mmc0_dat2",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_dat1.mmc0_dat1",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_dat0.mmc0_dat0",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_clk.mmc0_clk",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_cmd.mmc0_cmd",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mcasp0_aclkr.mmc0_sdwp", OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLDOWN},
-	{NULL, 0},
-};
-
 /* Module pin mux for mmc1 */
-static struct pinmux_config mmc1_pin_mux[] = {
-	{"gpmc_ad7.mmc1_dat7",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad6.mmc1_dat6",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad5.mmc1_dat5",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad4.mmc1_dat4",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
+static struct pinmux_config mmc1_common_pin_mux[] = {
 	{"gpmc_ad3.mmc1_dat3",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
 	{"gpmc_ad2.mmc1_dat2",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
 	{"gpmc_ad1.mmc1_dat1",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
 	{"gpmc_ad0.mmc1_dat0",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
 	{"gpmc_csn1.mmc1_clk",	OMAP_MUX_MODE2 | AM33XX_PIN_INPUT_PULLUP},
 	{"gpmc_csn2.mmc1_cmd",	OMAP_MUX_MODE2 | AM33XX_PIN_INPUT_PULLUP},
+	{NULL, 0},
+};
+
+static struct pinmux_config mmc1_dat4_7_pin_mux[] = {
+	{"gpmc_ad7.mmc1_dat7",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
+	{"gpmc_ad6.mmc1_dat6",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
+	{"gpmc_ad5.mmc1_dat5",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
+	{"gpmc_ad4.mmc1_dat4",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
+	{NULL, 0},
+};
+
+static struct pinmux_config mmc1_wp_only_pin_mux[] = {
 	{"gpmc_csn0.gpio1_29",	OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
+	{NULL, 0},
+};
+
+static struct pinmux_config mmc1_cd_only_pin_mux[] = {
 	{"gpmc_advn_ale.mmc1_sdcd", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
 	{NULL, 0},
 };
@@ -1801,7 +1810,10 @@ static void mcasp1_init(int evm_id, int profile)
 
 static void mmc1_init(int evm_id, int profile)
 {
-	setup_pin_mux(mmc1_pin_mux);
+	setup_pin_mux(mmc1_common_pin_mux);
+	setup_pin_mux(mmc1_dat4_7_pin_mux);
+	setup_pin_mux(mmc1_wp_only_pin_mux);
+	setup_pin_mux(mmc1_cd_only_pin_mux);
 
 	am335x_mmc[1].mmc = 2;
 	am335x_mmc[1].caps = MMC_CAP_4_BIT_DATA;
@@ -2021,7 +2033,9 @@ static void d_can_init(int evm_id, int profile)
 
 static void mmc0_init(int evm_id, int profile)
 {
-	setup_pin_mux(mmc0_pin_mux);
+	setup_pin_mux(mmc0_common_pin_mux);
+	setup_pin_mux(mmc0_wp_only_pin_mux);
+	setup_pin_mux(mmc0_cd_only_pin_mux);
 
 	omap2_hsmmc_init(am335x_mmc);
 	return;
@@ -2085,7 +2099,8 @@ static void tps65217_init(int evm_id, int profile)
 
 static void mmc0_no_cd_init(int evm_id, int profile)
 {
-	setup_pin_mux(mmc0_no_cd_pin_mux);
+	setup_pin_mux(mmc0_common_pin_mux);
+	setup_pin_mux(mmc0_wp_only_pin_mux);
 
 	omap2_hsmmc_init(am335x_mmc);
 	return;
