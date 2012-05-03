@@ -793,7 +793,7 @@ static struct pinmux_config mmc0_wp_only_pin_mux[] = {
 };
 
 static struct pinmux_config mmc0_cd_only_pin_mux[] = {
-	{"spi0_cs1.mmc0_sdcd",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
+	{"spi0_cs1.gpio0_6",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
 	{NULL, 0},
 };
 
