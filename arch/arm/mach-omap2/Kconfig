@@ -337,6 +337,11 @@ config MACH_AM335XEVM
 	depends on SOC_OMAPAM33XX
 	default y
 
+config MACH_AM335XEVM_WILINK8
+	bool "WiLink8 module on AM335X Evaluation Module"
+	depends on MACH_AM335XEVM
+	default n
+
 config MACH_AM335XIAEVM
 	bool "AM335X IA Evaluation Module"
 	depends on SOC_OMAPAM33XX

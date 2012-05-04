@@ -1117,7 +1117,12 @@ static int backlight_enable;
 
 struct wl12xx_platform_data am335xevm_wlan_data = {
 	.irq = OMAP_GPIO_IRQ(AM335XEVM_WLAN_IRQ_GPIO),
+#ifdef CONFIG_MACH_AM335XEVM_WILINK8
+        .board_ref_clock = WL12XX_REFCLOCK_38,
+        .board_tcxo_clock = WL12XX_TCXOCLOCK_26,
+#else
 	.board_ref_clock = WL12XX_REFCLOCK_38_XTAL, /* 38.4Mhz */
+#endif
 };
 
 /* Module pin mux for wlan and bluetooth */
