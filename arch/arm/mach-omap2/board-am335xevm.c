@@ -809,6 +809,14 @@ static struct pinmux_config uart2_pin_mux[] = {
 	{NULL, 0},
 };
 
+/* pinmux for gpio based key */
+static struct pinmux_config gpio_keys_pin_mux[] = {
+	{"gpmc_wait0.gpio0_30", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_oen_ren.gpio2_3", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_advn_ale.gpio2_2", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_be0n_cle.gpio2_5", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{NULL, 0},
+};
 
 /*
 * @pin_mux - single module pin-mux structure which defines pin-mux
@@ -2076,6 +2084,53 @@ static void mmc0_no_cd_init(int evm_id, int profile)
 	return;
 }
 
+/* Configure GPIOs for GPIO Keys */
+static struct gpio_keys_button am335x_evm_gpio_buttons[] = {
+	{
+		.code                   = BTN_0,
+		.gpio                   = GPIO_TO_PIN(2, 3),
+		.desc                   = "SW1",
+	},
+	{
+		.code                   = BTN_1,
+		.gpio                   = GPIO_TO_PIN(2, 2),
+		.desc                   = "SW2",
+	},
+	{
+		.code                   = BTN_2,
+		.gpio                   = GPIO_TO_PIN(0, 30),
+		.desc                   = "SW3",
+	},
+	{
+		.code                   = BTN_3,
+		.gpio                   = GPIO_TO_PIN(2, 5),
+		.desc                   = "SW4",
+		.wakeup                 = 1,
+	},
+};
+
+static struct gpio_keys_platform_data am335x_evm_gpio_key_info = {
+	.buttons        = am335x_evm_gpio_buttons,
+	.nbuttons       = ARRAY_SIZE(am335x_evm_gpio_buttons),
+};
+
+static struct platform_device am335x_evm_gpio_keys = {
+	.name   = "gpio-keys",
+	.id     = -1,
+	.dev    = {
+		.platform_data  = &am335x_evm_gpio_key_info,
+	},
+};
+
+static void gpio_keys_init(int evm_id, int profile)
+{
+	int err;
+
+	setup_pin_mux(gpio_keys_pin_mux);
+	err = platform_device_register(&am335x_evm_gpio_keys);
+	if (err)
+		pr_err("failed to register gpio key device\n");
+}
 
 /* setup spi0 */
 static void spi0_init(int evm_id, int profile)
@@ -2187,6 +2242,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{rgmii2_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{lcdc_init,     DEV_ON_BASEBOARD, PROFILE_ALL},
 	{tsc_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{gpio_keys_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
