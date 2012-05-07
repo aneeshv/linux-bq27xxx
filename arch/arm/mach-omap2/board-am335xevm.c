@@ -814,7 +814,16 @@ static struct pinmux_config gpio_keys_pin_mux[] = {
 	{"gpmc_wait0.gpio0_30", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
 	{"gpmc_oen_ren.gpio2_3", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
 	{"gpmc_advn_ale.gpio2_2", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
-	{"gpmc_be0n_cle.gpio2_5", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_ben0_cle.gpio2_5", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{NULL, 0},
+};
+
+/* pinmux for led device */
+static struct pinmux_config gpio_led_mux[] = {
+	{"gpmc_ad4.gpio1_4", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_ad5.gpio1_5", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_ad6.gpio1_6", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_ad7.gpio1_7", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
 	{NULL, 0},
 };
 
@@ -2132,6 +2141,50 @@ static void gpio_keys_init(int evm_id, int profile)
 		pr_err("failed to register gpio key device\n");
 }
 
+static struct gpio_led gpio_leds[] = {
+	{
+		.name			= "am335x:EVM_SK:usr0",
+		.gpio			= GPIO_TO_PIN(1, 4),	/* D1 */
+	},
+	{
+		.name			= "am335x:EVM_SK:usr1",
+		.gpio			= GPIO_TO_PIN(1, 5),	/* D2 */
+	},
+	{
+		.name			= "am335x:EVM_SK:mmc0",
+		.gpio			= GPIO_TO_PIN(1, 7),	/* D3 */
+		.default_trigger	= "mmc0",
+	},
+	{
+		.name			= "am335x:EVM_SK:heartbeat",
+		.gpio			= GPIO_TO_PIN(1, 6),	/* D4 */
+		.default_trigger	= "heartbeat",
+	},
+};
+
+static struct gpio_led_platform_data gpio_led_info = {
+	.leds		= gpio_leds,
+	.num_leds	= ARRAY_SIZE(gpio_leds),
+};
+
+static struct platform_device leds_gpio = {
+	.name	= "leds-gpio",
+	.id	= -1,
+	.dev	= {
+		.platform_data	= &gpio_led_info,
+	},
+};
+
+static void gpio_led_init(int evm_id, int profile)
+{
+	int err;
+
+	setup_pin_mux(gpio_led_mux);
+	err = platform_device_register(&leds_gpio);
+	if (err)
+		pr_err("failed to register gpio led device\n");
+}
+
 /* setup spi0 */
 static void spi0_init(int evm_id, int profile)
 {
@@ -2243,6 +2296,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{lcdc_init,     DEV_ON_BASEBOARD, PROFILE_ALL},
 	{tsc_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{gpio_keys_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
+	{gpio_led_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
