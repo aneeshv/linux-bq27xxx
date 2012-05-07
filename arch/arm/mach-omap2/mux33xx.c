@@ -139,7 +139,7 @@ static struct omap_mux __initdata am33xx_muxmodes[] = {
 		NULL, NULL, "mcasp0_fsr", "gpio2_1"),
 	_AM33XX_MUXENTRY(GPMC_ADVN_ALE, 0,
 		"gpmc_advn_ale", NULL, NULL, NULL,
-		NULL, NULL, NULL, "mmc1_sdcd"),
+		NULL, NULL, NULL, "gpio2_2"),
 	_AM33XX_MUXENTRY(GPMC_OEN_REN, 0,
 		"gpmc_oen_ren", NULL, NULL, NULL,
 		NULL, NULL, NULL, "gpio2_3"),
