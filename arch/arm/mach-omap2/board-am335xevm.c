@@ -2180,6 +2180,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{rgmii2_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{lcdc_init,     DEV_ON_BASEBOARD, PROFILE_ALL},
+	{tsc_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
