@@ -105,13 +105,13 @@ struct cpdma_ctlr {
 };
 
 struct cpdma_chan {
+	struct cpdma_desc __iomem	*head, *tail;
+	void __iomem			*hdp, *cp, *rxfree;
 	enum cpdma_state		state;
 	struct cpdma_ctlr		*ctlr;
 	int				chan_num;
 	spinlock_t			lock;
-	struct cpdma_desc __iomem	*head, *tail;
 	int				count;
-	void __iomem			*hdp, *cp, *rxfree;
 	u32				mask;
 	cpdma_handler_fn		handler;
 	enum dma_data_direction		dir;
@@ -217,7 +217,7 @@ desc_from_phys(struct cpdma_desc_pool *pool, dma_addr_t dma)
 }
 
 static struct cpdma_desc __iomem *
-cpdma_desc_alloc(struct cpdma_desc_pool *pool, int num_desc)
+cpdma_desc_alloc(struct cpdma_desc_pool *pool, int num_desc, bool is_rx)
 {
 	unsigned long flags;
 	int index;
@@ -225,8 +225,14 @@ cpdma_desc_alloc(struct cpdma_desc_pool *pool, int num_desc)
 
 	spin_lock_irqsave(&pool->lock, flags);
 
-	index = bitmap_find_next_zero_area(pool->bitmap, pool->num_desc, 0,
-					   num_desc, 0);
+	if (is_rx) {
+		index = bitmap_find_next_zero_area(pool->bitmap,
+				pool->num_desc/2, 0, num_desc, 0);
+	 } else {
+		index = bitmap_find_next_zero_area(pool->bitmap,
+				pool->num_desc, pool->num_desc/2, num_desc, 0);
+	}
+
 	if (index < pool->num_desc) {
 		bitmap_set(pool->bitmap, index, num_desc);
 		desc = pool->iomap + pool->desc_size * index;
@@ -674,6 +680,7 @@ int cpdma_chan_submit(struct cpdma_chan *chan, void *token, void *data,
 	unsigned long			flags;
 	u32				mode;
 	int				ret = 0;
+	bool                            is_rx;
 
 	spin_lock_irqsave(&chan->lock, flags);
 
@@ -682,7 +689,8 @@ int cpdma_chan_submit(struct cpdma_chan *chan, void *token, void *data,
 		goto unlock_ret;
 	}
 
-	desc = cpdma_desc_alloc(ctlr->pool, 1);
+	is_rx = (chan->rxfree != 0);
+	desc = cpdma_desc_alloc(ctlr->pool, 1, is_rx);
 	if (!desc) {
 		chan->stats.desc_alloc_fail++;
 		ret = -ENOMEM;
