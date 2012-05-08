@@ -117,7 +117,6 @@ struct tscadc {
 	int			wires;
 	u16			x_min, x_max;
 	u16			y_min, y_max;
-	int			analog_input;
 	int			x_plate_resistance;
 	int			irq;
 	void __iomem		*tsc_base;
@@ -151,29 +150,16 @@ static void tsc_step_config(struct tscadc *ts_dev)
 
 	switch (ts_dev->wires) {
 	case 4:
-		if (ts_dev->analog_input == 0)
-			stepconfigx |= TSCADC_STEPCONFIG_INP_4 |
-				TSCADC_STEPCONFIG_YPN;
-		else
-			stepconfigx |= TSCADC_STEPCONFIG_INP |
+		stepconfigx |= TSCADC_STEPCONFIG_INP |
 				TSCADC_STEPCONFIG_XNN;
 		break;
 	case 5:
 		stepconfigx |= TSCADC_STEPCONFIG_YNN |
-				TSCADC_STEPCONFIG_INP_5;
-		if (ts_dev->analog_input == 0)
-			stepconfigx |= TSCADC_STEPCONFIG_XNP |
-				TSCADC_STEPCONFIG_YPN;
-		else
-			stepconfigx |= TSCADC_STEPCONFIG_XNN |
+				TSCADC_STEPCONFIG_INP_5 | TSCADC_STEPCONFIG_XNN |
 				TSCADC_STEPCONFIG_YPP;
 		break;
 	case 8:
-		if (ts_dev->analog_input == 0)
-			stepconfigx |= TSCADC_STEPCONFIG_INP_4 |
-				TSCADC_STEPCONFIG_YPN;
-		else
-			stepconfigx |= TSCADC_STEPCONFIG_INP |
+		stepconfigx |= TSCADC_STEPCONFIG_INP |
 				TSCADC_STEPCONFIG_XNN;
 		break;
 	}
@@ -188,25 +174,14 @@ static void tsc_step_config(struct tscadc *ts_dev)
 			TSCADC_STEPCONFIG_INM | TSCADC_STEPCONFIG_FIFO1;
 	switch (ts_dev->wires) {
 	case 4:
-		if (ts_dev->analog_input == 0)
-			stepconfigy |= TSCADC_STEPCONFIG_XNP;
-		else
-			stepconfigy |= TSCADC_STEPCONFIG_YPP;
+		stepconfigy |= TSCADC_STEPCONFIG_YPP;
 		break;
 	case 5:
-		stepconfigy |= TSCADC_STEPCONFIG_XPP | TSCADC_STEPCONFIG_INP_5;
-		if (ts_dev->analog_input == 0)
-			stepconfigy |= TSCADC_STEPCONFIG_XNN |
-				TSCADC_STEPCONFIG_YPP;
-		else
-			stepconfigy |= TSCADC_STEPCONFIG_XNP |
-				TSCADC_STEPCONFIG_YPN;
+		stepconfigy |= TSCADC_STEPCONFIG_XPP | TSCADC_STEPCONFIG_INP_5 |
+			TSCADC_STEPCONFIG_XNP | TSCADC_STEPCONFIG_YPN;
 		break;
 	case 8:
-		if (ts_dev->analog_input == 0)
-			stepconfigy |= TSCADC_STEPCONFIG_XNP;
-		else
-			stepconfigy |= TSCADC_STEPCONFIG_YPP;
+		stepconfigy |= TSCADC_STEPCONFIG_YPP;
 		break;
 	}
 
@@ -215,15 +190,9 @@ static void tsc_step_config(struct tscadc *ts_dev)
 		tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY(i), delay);
 	}
 
-	chargeconfig = TSCADC_STEPCONFIG_XPP |
-			TSCADC_STEPCONFIG_YNN |
-			TSCADC_STEPCONFIG_RFP |
-			TSCADC_STEPCHARGE_RFM;
-	if (ts_dev->analog_input == 0)
-		chargeconfig |= TSCADC_STEPCHARGE_INM_SWAP |
-			TSCADC_STEPCHARGE_INP_SWAP;
-	else
-		chargeconfig |= TSCADC_STEPCHARGE_INM | TSCADC_STEPCHARGE_INP;
+	chargeconfig = TSCADC_STEPCONFIG_XPP | TSCADC_STEPCONFIG_YNN |
+			TSCADC_STEPCONFIG_RFP | TSCADC_STEPCHARGE_RFM |
+			TSCADC_STEPCHARGE_INM | TSCADC_STEPCHARGE_INP;
 	tscadc_writel(ts_dev, TSCADC_REG_CHARGECONFIG, chargeconfig);
 	tscadc_writel(ts_dev, TSCADC_REG_CHARGEDELAY, TSCADC_STEPCHARGE_DELAY);
 
@@ -247,12 +216,8 @@ static void tsc_idle_config(struct tscadc *ts_config)
 	/* Idle mode touch screen config */
 	unsigned int	 idleconfig;
 
-	idleconfig = TSCADC_STEPCONFIG_YNN |
-			TSCADC_STEPCONFIG_INM | TSCADC_STEPCONFIG_IDLE_INP;
-	if (ts_config->analog_input == 0)
-		idleconfig |= TSCADC_STEPCONFIG_XNN;
-	else
-		idleconfig |= TSCADC_STEPCONFIG_YPN;
+	idleconfig = TSCADC_STEPCONFIG_YNN | TSCADC_STEPCONFIG_INM |
+			TSCADC_STEPCONFIG_IDLE_INP | TSCADC_STEPCONFIG_YPN;
 
 	tscadc_writel(ts_config, TSCADC_REG_IDLECONFIG, idleconfig);
 }
@@ -476,7 +441,6 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	ts_dev->wires = pdata->wires;
 	ts_dev->x_max = pdata->x_max;
 	ts_dev->y_max = pdata->y_max;
-	ts_dev->analog_input = pdata->analog_input;
 	ts_dev->x_plate_resistance = pdata->x_plate_resistance;
 
 	/* Set the control register bits */
