@@ -1702,7 +1702,7 @@ static struct lis3lv02d_platform_data lis331dlh_pdata = {
 	.st_max_limits[2] = 750,
 };
 
-static struct i2c_board_info am335x_i2c_boardinfo1[] = {
+static struct i2c_board_info am335x_i2c1_boardinfo[] = {
 	{
 		I2C_BOARD_INFO("tlv320aic3x", 0x1b),
 	},
@@ -1721,15 +1721,15 @@ static struct i2c_board_info am335x_i2c_boardinfo1[] = {
 static void i2c1_init(int evm_id, int profile)
 {
 	setup_pin_mux(i2c1_pin_mux);
-	omap_register_i2c_bus(2, 100, am335x_i2c_boardinfo1,
-			ARRAY_SIZE(am335x_i2c_boardinfo1));
+	omap_register_i2c_bus(2, 100, am335x_i2c1_boardinfo,
+			ARRAY_SIZE(am335x_i2c1_boardinfo));
 	return;
 }
 
 
 static struct at24_platform_data bone_daughter_board_eeprom_info;
 
-static struct i2c_board_info am335x_i2c_boardinfo2[] = {
+static struct i2c_board_info am335x_i2c2_boardinfo[] = {
 	{
 		/* Daughter Board EEPROM */
 		I2C_BOARD_INFO("24c256", LCD_CAPE_I2C_ADDR),
@@ -1740,8 +1740,8 @@ static struct i2c_board_info am335x_i2c_boardinfo2[] = {
 static void i2c2_init(int evm_id, int profile)
 {
 	setup_pin_mux(i2c2_pin_mux);
-	omap_register_i2c_bus(3, 100, am335x_i2c_boardinfo2,
-			ARRAY_SIZE(am335x_i2c_boardinfo2));
+	omap_register_i2c_bus(3, 100, am335x_i2c2_boardinfo,
+			ARRAY_SIZE(am335x_i2c2_boardinfo));
 	return;
 }
 
@@ -2483,7 +2483,7 @@ static struct tps65910_board am335x_tps65910_info = {
 *	   the below struct. Daughter boards eeprom are probed 1st. Baseboard
 *	   eeprom probe is called last.
 */
-static struct i2c_board_info __initdata am335x_i2c_boardinfo[] = {
+static struct i2c_board_info __initdata am335x_i2c0_boardinfo[] = {
 	{
 		/* Daughter Board EEPROM */
 		I2C_BOARD_INFO("24c256", DAUG_BOARD_I2C_ADDR),
@@ -2557,8 +2557,8 @@ static void __init am335x_evm_i2c_init(void)
 
 	evm_init_cpld();
 
-	omap_register_i2c_bus(1, 100, am335x_i2c_boardinfo,
-				ARRAY_SIZE(am335x_i2c_boardinfo));
+	omap_register_i2c_bus(1, 100, am335x_i2c0_boardinfo,
+				ARRAY_SIZE(am335x_i2c0_boardinfo));
 }
 
 static struct resource am335x_rtc_resources[] = {
