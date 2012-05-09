@@ -2071,12 +2071,12 @@ static void tps65217_init(int evm_id, int profile)
 	if (!(val & TPS65217_STATUS_ACPWR)) {
 		/* If powered by USB then disable OPP120 and OPPTURBO */
 		pr_info("Maximum current provided by the USB port is 500mA"
-			" which is not sufficient when operating @OPP120 and"
-			" OPPTURBO. The current requirement for some use-cases"
+			" which is not sufficient\nwhen operating @OPP120 and"
+			" OPPTURBO. The current requirement for some\nuse-cases"
 			" using OPP100 might also exceed the maximum current"
-			" that the USB port can provide. Unless you are fully"
-			" confident that the current requirements for OPP100"
-			" use-case don't exceed the USB limits, switching to"
+			" that the\nUSB port can provide. Unless you are fully"
+			" confident that the current\nrequirements for OPP100"
+			" use-case don't exceed the USB limits, switching\nto"
 			" AC power is recommended.\n");
 		opp_disable(mpu_dev, 600000000);
 		opp_disable(mpu_dev, 720000000);
