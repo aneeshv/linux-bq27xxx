@@ -1300,9 +1300,6 @@ static unsigned int   am33xx_evmid = GEN_PURP_EVM;
 * @evmid - evm id which needs to be configured
 *
 * This function is called to configure board evm id.
-* IA Motor Control EVM needs special setting of MAC PHY Id.
-* This function is called when IA Motor Control EVM is detected
-* during boot-up.
 */
 void am33xx_evmid_fillup(unsigned int evmid)
 {
