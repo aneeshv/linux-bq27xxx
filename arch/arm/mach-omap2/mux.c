@@ -566,6 +566,48 @@ static inline void omap_mux_decode(struct seq_file *s, u16 val)
 	} while (i-- > 0);
 }
 
+static inline void am33xx_mux_decode(struct seq_file *s, u16 val)
+{
+	char *flags[OMAP_MUX_MAX_NR_FLAGS];
+	char mode[sizeof("OMAP_MUX_MODE") + 1];
+	int i , j;
+
+	i = j = 0;
+	sprintf(mode, "OMAP_MUX_MODE%d", val & 0x7);
+	flags[i] = mode;
+
+	if (val & AM33XX_INPUT_EN) {
+		j = 1;
+		if (val & AM33XX_PULL_DISA) {
+			OMAP_MUX_TEST_FLAG(val, AM33XX_PIN_INPUT);
+		} else if (!(val & AM33XX_PULL_UP)) {
+			OMAP_MUX_TEST_FLAG(val, AM33XX_PIN_INPUT_PULLDOWN);
+		} else {
+			OMAP_MUX_TEST_FLAG(val, AM33XX_PIN_INPUT_PULLUP);
+		}
+	}
+	if (val & AM33XX_SLEWCTRL_SLOW) {
+		j = 1;
+		OMAP_MUX_TEST_FLAG(val, AM33XX_SLEWCTRL_SLOW);
+	} else if (!(val & AM33XX_INPUT_EN)) {
+		if (val & AM33XX_PIN_OUTPUT_PULLUP) {
+			j = 1;
+			OMAP_MUX_TEST_FLAG(val, AM33XX_PIN_OUTPUT_PULLUP);
+		} else if (val & AM33XX_PULL_DISA) {
+			j = 1;
+			OMAP_MUX_TEST_FLAG(val, AM33XX_PULL_DISA);
+		}
+	}
+	if (j == 0)
+		OMAP_MUX_TEST_FLAG(val, AM33XX_PIN_OUTPUT);
+
+	for (j = 0; j <= i; j++) {
+		seq_printf(s, "%s", flags[j]);
+		if (j != i)
+			seq_printf(s, " | ");
+	}
+}
+
 #define OMAP_MUX_DEFNAME_LEN	32
 
 static int omap_mux_dbg_board_show(struct seq_file *s, void *unused)
@@ -602,7 +644,10 @@ static int omap_mux_dbg_board_show(struct seq_file *s, void *unused)
 		 * same OMAP generation.
 		 */
 		seq_printf(s, "OMAP%d_MUX(%s, ", omap_gen, m0_def);
-		omap_mux_decode(s, val);
+		if (cpu_is_am335x())
+			am33xx_mux_decode(s, val);
+		else
+			omap_mux_decode(s, val);
 		seq_printf(s, "),\n");
 	}
 
@@ -661,7 +706,10 @@ static int omap_mux_dbg_signal_show(struct seq_file *s, void *unused)
 			m->balls[0] ? m->balls[0] : none,
 			m->balls[1] ? m->balls[1] : none);
 	seq_printf(s, "mode: ");
-	omap_mux_decode(s, val);
+	if (cpu_is_am335x())
+		am33xx_mux_decode(s, val);
+	else
+		omap_mux_decode(s, val);
 	seq_printf(s, "\n");
 	seq_printf(s, "signals: %s | %s | %s | %s | %s | %s | %s | %s\n",
 			m->muxnames[0] ? m->muxnames[0] : none,
