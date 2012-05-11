@@ -15,6 +15,7 @@
 #include <linux/io.h>
 #include <linux/clk.h>
 #include <linux/err.h>
+#include <linux/export.h>
 #include <linux/slab.h>
 #include <linux/of.h>
 #include <linux/davinci_emac.h>
@@ -1292,7 +1293,7 @@ static struct platform_device am33xx_cpsw_device = {
 
 static unsigned char  am33xx_macid0[ETH_ALEN];
 static unsigned char  am33xx_macid1[ETH_ALEN];
-static unsigned int   am33xx_evmid;
+static unsigned int   am33xx_evmid = GEN_PURP_EVM;
 
 /*
 * am33xx_evmid_fillup - set up board evmid
@@ -1308,6 +1309,12 @@ void am33xx_evmid_fillup(unsigned int evmid)
 	am33xx_evmid = evmid;
 	return;
 }
+
+unsigned int get_am33xx_evmid(void)
+{
+	return am33xx_evmid;
+}
+EXPORT_SYMBOL(get_am33xx_evmid);
 
 /*
 * am33xx_cpsw_macidfillup - setup mac adrresses
