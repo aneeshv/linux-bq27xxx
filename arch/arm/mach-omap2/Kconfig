@@ -337,6 +337,14 @@ config MACH_AM335XEVM
 	depends on SOC_OMAPAM33XX
 	default y
 
+config MACH_AM335XEVM_VIBRATOR
+	bool "AM335X EVM Vibrator Support"
+	depends on MACH_AM335XEVM && ANDROID_TIMED_OUTPUT
+	default n
+	help
+	 Enable to use the Haptis feedback on AM335xEVM with Android,
+	 with the board booting in Profile 0.
+
 config MACH_AM335XEVM_WILINK8
 	bool "WiLink8 module on AM335X Evaluation Module"
 	depends on MACH_AM335XEVM
