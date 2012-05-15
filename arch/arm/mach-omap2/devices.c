@@ -1294,25 +1294,6 @@ static struct platform_device am33xx_cpsw_device = {
 
 static unsigned char  am33xx_macid0[ETH_ALEN];
 static unsigned char  am33xx_macid1[ETH_ALEN];
-static unsigned int   am33xx_evmid = GEN_PURP_EVM;
-
-/*
-* am33xx_evmid_fillup - set up board evmid
-* @evmid - evm id which needs to be configured
-*
-* This function is called to configure board evm id.
-*/
-void am33xx_evmid_fillup(unsigned int evmid)
-{
-	am33xx_evmid = evmid;
-	return;
-}
-
-unsigned int get_am33xx_evmid(void)
-{
-	return am33xx_evmid;
-}
-EXPORT_SYMBOL(get_am33xx_evmid);
 
 /*
 * am33xx_cpsw_macidfillup - setup mac adrresses

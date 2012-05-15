@@ -30,6 +30,7 @@
 #include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <linux/err.h>
+#include <linux/export.h>
 #include <linux/wl12xx.h>
 #include <linux/ethtool.h>
 #include <linux/mfd/tps65910.h>
@@ -439,6 +440,32 @@ static bool daughter_brd_detected;
 static char am335x_mac_addr[EEPROM_NO_OF_MAC_ADDR][ETH_ALEN];
 
 #define AM335X_EEPROM_HEADER		0xEE3355AA
+
+static int am33xx_evmid = -EINVAL;
+
+/*
+* am335x_evm_set_id - set up board evmid
+* @evmid - evm id which needs to be configured
+*
+* This function is called to configure board evm id.
+*/
+void am335x_evm_set_id(unsigned int evmid)
+{
+	am33xx_evmid = evmid;
+	return;
+}
+
+/*
+* am335x_evm_get_id - returns Board Type (EVM/BB/EVM-SK ...)
+*
+* Note:
+*	returns -EINVAL if Board detection hasn't happened yet.
+*/
+int am335x_evm_get_id(void)
+{
+	return am33xx_evmid;
+}
+EXPORT_SYMBOL(am335x_evm_get_id);
 
 /* current profile if exists else PROFILE_0 on error */
 static u32 am335x_get_profile_selection(void)
@@ -1020,6 +1047,8 @@ static void _configure_device(int evm_id, struct evm_dev_cfg *dev_cfg,
 	int profile)
 {
 	int i;
+
+	am335x_evm_set_id(evm_id);
 
 	/*
 	* Only General Purpose & Industrial Auto Motro Control
@@ -2338,9 +2367,6 @@ static void setup_ind_auto_motor_ctrl_evm(void)
 	_configure_device(IND_AUT_MTR_EVM, ind_auto_mtrl_evm_dev_cfg,
 		PROFILE_0);
 
-	/* Fillup global evmid */
-	am33xx_evmid_fillup(IND_AUT_MTR_EVM);
-
 	am33xx_cpsw_init(AM33XX_CPSW_MODE_MII, "0:1e", "0:00");
 }
 
@@ -2358,9 +2384,6 @@ static void setup_beaglebone_old(void)
 	phy_register_fixup_for_uid(BBB_PHY_ID, BBB_PHY_MASK,
 					beaglebone_phy_fixup);
 
-	/* Fill up global evmid */
-	am33xx_evmid_fillup(BEAGLE_BONE_OLD);
-
 	am33xx_cpsw_init(AM33XX_CPSW_MODE_RMII, NULL, NULL);
 }
 
@@ -2376,9 +2399,6 @@ static void setup_beaglebone(void)
 
 	/* TPS65217 regulator has full constraints */
 	regulator_has_full_constraints();
-
-	/* Fill up global evmid */
-	am33xx_evmid_fillup(BEAGLE_BONE_A3);
 
 	am33xx_cpsw_init(AM33XX_CPSW_MODE_MII, NULL, NULL);
 }
