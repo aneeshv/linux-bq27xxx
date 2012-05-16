@@ -109,10 +109,17 @@ static const struct display_panel bone_lcd_cape_disp_panel = {
 #define AM335X_BACKLIGHT_DEFAULT_BRIGHTNESS    100
 #define AM335X_PWM_PERIOD_NANO_SECONDS        (5000 * 10)
 
-#define PWM_DEVICE_ID   "ecap.0"
+static struct platform_pwm_backlight_data am335x_backlight_data0 = {
+	.pwm_id         = "ecap.0",
+	.ch             = -1,
+	.lth_brightness	= 21,
+	.max_brightness = AM335X_BACKLIGHT_MAX_BRIGHTNESS,
+	.dft_brightness = AM335X_BACKLIGHT_DEFAULT_BRIGHTNESS,
+	.pwm_period_ns  = AM335X_PWM_PERIOD_NANO_SECONDS,
+};
 
-static struct platform_pwm_backlight_data am335x_backlight_data = {
-	.pwm_id         = PWM_DEVICE_ID,
+static struct platform_pwm_backlight_data am335x_backlight_data2 = {
+	.pwm_id         = "ecap.2",
 	.ch             = -1,
 	.lth_brightness	= 21,
 	.max_brightness = AM335X_BACKLIGHT_MAX_BRIGHTNESS,
@@ -1107,7 +1114,11 @@ static struct pinmux_config ecap0_pin_mux[] = {
 	{NULL, 0},
 };
 
-static int backlight_enable;
+/* Module pin mux for eCAP */
+static struct pinmux_config ecap2_pin_mux[] = {
+	{"mcasp0_ahclkr.ecap2_in_pwm2_out", AM33XX_PIN_OUTPUT},
+	{NULL, 0},
+};
 
 #define AM335XEVM_WLAN_PMENA_GPIO	GPIO_TO_PIN(1, 30)
 #define AM335XEVM_WLAN_IRQ_GPIO		GPIO_TO_PIN(3, 17)
@@ -1150,19 +1161,27 @@ static struct pinmux_config wl12xx_pin_mux[] = {
 	{NULL, 0},
  };
 
+static bool backlight_enable;
+
 static void enable_ecap0(int evm_id, int profile)
 {
 	backlight_enable = true;
 	setup_pin_mux(ecap0_pin_mux);
 }
 
+static void enable_ecap2(int evm_id, int profile)
+{
+	backlight_enable = true;
+	setup_pin_mux(ecap2_pin_mux);
+}
+
 /* Setup pwm-backlight */
 static struct platform_device am335x_backlight = {
 	.name           = "pwm-backlight",
 	.id             = -1,
-	.dev            = {
-		.platform_data  = &am335x_backlight_data,
-	}
+	.dev		= {
+		.platform_data = &am335x_backlight_data0,
+	},
 };
 
 static struct pwmss_platform_data  pwm_pdata[3] = {
@@ -1177,17 +1196,39 @@ static struct pwmss_platform_data  pwm_pdata[3] = {
 	},
 };
 
-static int __init ecap0_init(void)
+static int __init backlight_init(void)
 {
 	int status = 0;
 
 	if (backlight_enable) {
-		am33xx_register_ecap(0, &pwm_pdata[0]);
+		int ecap_index = 0;
+
+		switch (am335x_evm_get_id()) {
+		case GEN_PURP_EVM:
+			ecap_index = 0;
+			break;
+		case EVM_SK:
+			/*
+			 * Invert polarity of PWM wave from ECAP to handle
+			 * backlight intensity to pwm brightness
+			 */
+			ecap_index = 2;
+			pwm_pdata[ecap_index].chan_attrib[0].inverse_pol = true;
+			am335x_backlight.dev.platform_data =
+				&am335x_backlight_data2;
+			break;
+		default:
+			pr_err("%s: Error on attempting to enable backlight,"
+				" not supported\n", __func__);
+			return -EINVAL;
+		}
+
+		am33xx_register_ecap(ecap_index, &pwm_pdata[ecap_index]);
 		platform_device_register(&am335x_backlight);
 	}
 	return status;
 }
-late_initcall(ecap0_init);
+late_initcall(backlight_init);
 
 static int __init conf_disp_pll(int rate)
 {
@@ -2348,6 +2389,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{rgmii2_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{lcdc_init,     DEV_ON_BASEBOARD, PROFILE_ALL},
+	{enable_ecap2,     DEV_ON_BASEBOARD, PROFILE_ALL},
 	{tsc_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{gpio_keys_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
 	{gpio_led_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
