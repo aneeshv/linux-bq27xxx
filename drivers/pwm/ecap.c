@@ -327,6 +327,11 @@ static int ecap_probe(struct platform_device *pdev)
 	pwm_set_drvdata(&ep->pwm, ep);
 	ret =  pwm_register(&ep->pwm, &pdev->dev, -1);
 	platform_set_drvdata(pdev, ep);
+	/* Inverse the polarity of PWM wave */
+	if (pdata->chan_attrib[0].inverse_pol) {
+		ep->pwm.active_high = 1;
+		ecap_pwm_set_polarity(&ep->pwm, 1);
+	}
 	return 0;
 
 err_ioremap:
