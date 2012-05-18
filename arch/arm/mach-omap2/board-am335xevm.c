@@ -2147,12 +2147,12 @@ static struct gpio_keys_button am335x_evm_gpio_buttons[] = {
 		.code                   = BTN_2,
 		.gpio                   = GPIO_TO_PIN(0, 30),
 		.desc                   = "SW3",
+		.wakeup                 = 1,
 	},
 	{
 		.code                   = BTN_3,
 		.gpio                   = GPIO_TO_PIN(2, 5),
 		.desc                   = "SW4",
-		.wakeup                 = 1,
 	},
 };
 
