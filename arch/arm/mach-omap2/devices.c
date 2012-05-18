@@ -1191,6 +1191,9 @@ static int __init omap2_init_devices(void)
 arch_initcall(omap2_init_devices);
 
 #define AM33XX_EMAC_MDIO_FREQ		(1000000)
+/* Port Vlan IDs for Dual Mac Mode */
+#define CPSW_PORT_VLAN_SLAVE_0		2
+#define CPSW_PORT_VLAN_SLAVE_1		3
 
 static u64 am33xx_cpsw_dmamask = DMA_BIT_MASK(32);
 /* TODO : Verify the offsets */
@@ -1199,11 +1202,13 @@ static struct cpsw_slave_data am33xx_cpsw_slaves[] = {
 		.slave_reg_ofs  = 0x208,
 		.sliver_reg_ofs = 0xd80,
 		.phy_id		= "0:00",
+		.dual_emac_reserved_vlan = CPSW_PORT_VLAN_SLAVE_0,
 	},
 	{
 		.slave_reg_ofs  = 0x308,
 		.sliver_reg_ofs = 0xdc0,
 		.phy_id		= "0:01",
+		.dual_emac_reserved_vlan = CPSW_PORT_VLAN_SLAVE_1,
 	},
 };
 
