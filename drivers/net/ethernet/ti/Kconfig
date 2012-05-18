@@ -60,6 +60,14 @@ config TI_CPSW
 	  To compile this driver as a module, choose M here: the module
 	  will be called cpsw.
 
+config TI_CPSW_DUAL_EMAC
+	bool "TI CPSW Switch as Dual EMAC"
+	depends on TI_CPSW
+	help
+	  This driver makes TI's CPSW Ethernet Switch as Dual EMAC. Switch
+	  features will not be available in this mode, Dual Emac default
+	  VLAN ids should not be used in VLAN configuration
+
 config TLAN
 	tristate "TI ThunderLAN support"
 	depends on (PCI || EISA)
