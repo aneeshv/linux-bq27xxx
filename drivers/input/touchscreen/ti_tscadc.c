@@ -428,6 +428,7 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 		goto err_free_irq;
 	}
 	clock_rate = clk_get_rate(clk);
+	clk_put(clk);
 	clk_value = clock_rate / ADC_CLK;
 	if (clk_value < 7) {
 		dev_err(&pdev->dev, "clock input less than min clock requirement\n");
@@ -501,6 +502,7 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	return 0;
 
 err_fail:
+	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 err_free_irq:
 	free_irq(ts_dev->irq, ts_dev);
@@ -510,6 +512,7 @@ err_release_mem:
 	release_mem_region(res->start, resource_size(res));
 	input_free_device(ts_dev->input);
 err_free_mem:
+	platform_set_drvdata(pdev, NULL);
 	kfree(ts_dev);
 	return err;
 }
@@ -519,6 +522,7 @@ static int __devexit tscadc_remove(struct platform_device *pdev)
 	struct tscadc		*ts_dev = platform_get_drvdata(pdev);
 	struct resource		*res;
 
+	tscadc_writel(ts_dev, TSCADC_REG_SE, 0x00);
 	free_irq(ts_dev->irq, ts_dev);
 
 	input_unregister_device(ts_dev->input);
@@ -527,6 +531,7 @@ static int __devexit tscadc_remove(struct platform_device *pdev)
 	iounmap(ts_dev->tsc_base);
 	release_mem_region(res->start, resource_size(res));
 
+	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 
 	kfree(ts_dev);
