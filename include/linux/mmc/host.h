@@ -214,6 +214,7 @@ struct mmc_host {
 #define MMC_CAP_WAIT_WHILE_BUSY	(1 << 9)	/* Waits while card is busy */
 #define MMC_CAP_ERASE		(1 << 10)	/* Allow erase/trim commands */
 #define MMC_CAP_1_8V_DDR	(1 << 11)	/* can support */
+#define MMC_CAP2_DETECT_ON_ERR (1 << 8)        /* On I/O err check card removal */
 						/* DDR mode at 1.8V */
 #define MMC_CAP_1_2V_DDR	(1 << 12)	/* can support */
 						/* DDR mode at 1.2V */
