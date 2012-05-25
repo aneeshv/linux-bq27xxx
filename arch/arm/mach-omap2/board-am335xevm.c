@@ -762,7 +762,7 @@ static struct pinmux_config mmc0_common_pin_mux[] = {
 };
 
 static struct pinmux_config mmc0_wp_only_pin_mux[] = {
-	{"mcasp0_aclkr.mmc0_sdwp", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
+	{"mcasp0_aclkr.gpio3_18", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
 	{NULL, 0},
 };
 
