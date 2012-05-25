@@ -77,6 +77,14 @@
 #define BBB_PHY_ID		0x7c0f1
 #define BBB_PHY_MASK		0xfffffffe
 
+/* AM335X EVM Phy ID and Debug Registers */
+#define AM335X_EVM_PHY_ID		0x4dd074
+#define AM335X_EVM_PHY_MASK		0xfffffffe
+#define AR8051_PHY_DEBUG_ADDR_REG	0x1d
+#define AR8051_PHY_DEBUG_DATA_REG	0x1e
+#define AR8051_DEBUG_RGMII_CLK_DLY_REG	0x5
+#define AR8051_RGMII_TX_CLK_DLY		BIT(8)
+
 #define BEAGLEBONE_LCD_AVDD_EN GPIO_TO_PIN(0, 7)
 #define BEAGLEBONE_LCD_BL GPIO_TO_PIN(1, 18)
 
@@ -2434,6 +2442,15 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{NULL, 0, 0},
 };
 
+static int am33xx_evm_tx_clk_dly_phy_fixup(struct phy_device *phydev)
+{
+	phy_write(phydev, AR8051_PHY_DEBUG_ADDR_REG,
+		  AR8051_DEBUG_RGMII_CLK_DLY_REG);
+	phy_write(phydev, AR8051_PHY_DEBUG_DATA_REG, AR8051_RGMII_TX_CLK_DLY);
+
+	return 0;
+}
+
 static void setup_general_purpose_evm(void)
 {
 	u32 prof_sel = am335x_get_profile_selection();
@@ -2442,6 +2459,9 @@ static void setup_general_purpose_evm(void)
 	_configure_device(GEN_PURP_EVM, gen_purp_evm_dev_cfg, (1L << prof_sel));
 
 	am33xx_cpsw_init(AM33XX_CPSW_MODE_RGMII, NULL, NULL);
+	/* Atheros Tx Clk delay Phy fixup */
+	phy_register_fixup_for_uid(AM335X_EVM_PHY_ID, AM335X_EVM_PHY_MASK,
+				   am33xx_evm_tx_clk_dly_phy_fixup);
 }
 
 static void setup_ind_auto_motor_ctrl_evm(void)
@@ -2508,6 +2528,9 @@ static void setup_starterkit(void)
 	_configure_device(EVM_SK, evm_sk_dev_cfg, PROFILE_NONE);
 
 	am33xx_cpsw_init(AM33XX_CPSW_MODE_RGMII, NULL, NULL);
+	/* Atheros Tx Clk delay Phy fixup */
+	phy_register_fixup_for_uid(AM335X_EVM_PHY_ID, AM335X_EVM_PHY_MASK,
+				   am33xx_evm_tx_clk_dly_phy_fixup);
 }
 
 static void am335x_setup_daughter_board(struct memory_accessor *m, void *c)
