@@ -63,9 +63,6 @@ static struct omap_mbox *m3_mbox;
 static struct powerdomain *cefuse_pwrdm, *gfx_pwrdm;
 static struct clockdomain *gfx_l3_clkdm, *gfx_l4ls_clkdm;
 
-static struct am33xx_padconf lp_padconf;
-static int gmii_sel;
-
 static int core_suspend_stat = -1;
 static int m3_state = M3_STATE_UNKNOWN;
 
@@ -77,72 +74,20 @@ static DECLARE_COMPLETION(a8_m3_sync);
 
 static void save_padconf(void)
 {
-	lp_padconf.mii1_col	= readl(AM33XX_CTRL_REGADDR(0x0908));
-	lp_padconf.mii1_crs	= readl(AM33XX_CTRL_REGADDR(0x090c));
-	lp_padconf.mii1_rxerr	= readl(AM33XX_CTRL_REGADDR(0x0910));
-	lp_padconf.mii1_txen	= readl(AM33XX_CTRL_REGADDR(0x0914));
-	lp_padconf.mii1_rxdv	= readl(AM33XX_CTRL_REGADDR(0x0918));
-	lp_padconf.mii1_txd3	= readl(AM33XX_CTRL_REGADDR(0x091c));
-	lp_padconf.mii1_txd2	= readl(AM33XX_CTRL_REGADDR(0x0920));
-	lp_padconf.mii1_txd1	= readl(AM33XX_CTRL_REGADDR(0x0924));
-	lp_padconf.mii1_txd0	= readl(AM33XX_CTRL_REGADDR(0x0928));
-	lp_padconf.mii1_txclk	= readl(AM33XX_CTRL_REGADDR(0x092c));
-	lp_padconf.mii1_rxclk	= readl(AM33XX_CTRL_REGADDR(0x0930));
-	lp_padconf.mii1_rxd3	= readl(AM33XX_CTRL_REGADDR(0x0934));
-	lp_padconf.mii1_rxd2	= readl(AM33XX_CTRL_REGADDR(0x0938));
-	lp_padconf.mii1_rxd1	= readl(AM33XX_CTRL_REGADDR(0x093c));
-	lp_padconf.mii1_rxd0	= readl(AM33XX_CTRL_REGADDR(0x0940));
-	lp_padconf.rmii1_refclk	= readl(AM33XX_CTRL_REGADDR(0x0944));
-	lp_padconf.mdio_data	= readl(AM33XX_CTRL_REGADDR(0x0948));
-	lp_padconf.mdio_clk	= readl(AM33XX_CTRL_REGADDR(0x094c));
-	gmii_sel		= readl(AM33XX_CTRL_REGADDR(0x0650));
-	/* sdio */
-	lp_padconf.gpmc_a1	= readl(AM33XX_CTRL_REGADDR(0x0844));
-	lp_padconf.gpmc_a2	= readl(AM33XX_CTRL_REGADDR(0x0848));
-	lp_padconf.gpmc_a3	= readl(AM33XX_CTRL_REGADDR(0x084c));
-	lp_padconf.gpmc_ben1	= readl(AM33XX_CTRL_REGADDR(0x0878));
-	lp_padconf.gpmc_csn3	= readl(AM33XX_CTRL_REGADDR(0x0888));
-	lp_padconf.gpmc_clk	= readl(AM33XX_CTRL_REGADDR(0x088c));
-	/* uart1 */
-	lp_padconf.uart1_ctsn	= readl(AM33XX_CTRL_REGADDR(0x0978));
-	lp_padconf.uart1_rtsn	= readl(AM33XX_CTRL_REGADDR(0x097C));
-	lp_padconf.uart1_rxd	= readl(AM33XX_CTRL_REGADDR(0x0980));
-	lp_padconf.uart1_txd	= readl(AM33XX_CTRL_REGADDR(0x0984));
+	struct am33xx_padconf_regs *temp = am33xx_lp_padconf;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
+		temp->val = readl(AM33XX_CTRL_REGADDR(temp->offset));
 }
 
 static void restore_padconf(void)
 {
-	writel(lp_padconf.mii1_col, AM33XX_CTRL_REGADDR(0x0908));
-	writel(lp_padconf.mii1_crs, AM33XX_CTRL_REGADDR(0x090c));
-	writel(lp_padconf.mii1_rxerr, AM33XX_CTRL_REGADDR(0x0910));
-	writel(lp_padconf.mii1_txen, AM33XX_CTRL_REGADDR(0x0914));
-	writel(lp_padconf.mii1_rxdv, AM33XX_CTRL_REGADDR(0x0918));
-	writel(lp_padconf.mii1_txd3, AM33XX_CTRL_REGADDR(0x091c));
-	writel(lp_padconf.mii1_txd2, AM33XX_CTRL_REGADDR(0x0920));
-	writel(lp_padconf.mii1_txd1, AM33XX_CTRL_REGADDR(0x0924));
-	writel(lp_padconf.mii1_txd0, AM33XX_CTRL_REGADDR(0x0928));
-	writel(lp_padconf.mii1_txclk, AM33XX_CTRL_REGADDR(0x092c));
-	writel(lp_padconf.mii1_rxclk, AM33XX_CTRL_REGADDR(0x0930));
-	writel(lp_padconf.mii1_rxd3, AM33XX_CTRL_REGADDR(0x0934));
-	writel(lp_padconf.mii1_rxd2, AM33XX_CTRL_REGADDR(0x0938));
-	writel(lp_padconf.mii1_rxd1, AM33XX_CTRL_REGADDR(0x093c));
-	writel(lp_padconf.mii1_rxd0, AM33XX_CTRL_REGADDR(0x0940));
-	writel(lp_padconf.rmii1_refclk, AM33XX_CTRL_REGADDR(0x0944));
-	writel(lp_padconf.mdio_data, AM33XX_CTRL_REGADDR(0x0948));
-	writel(lp_padconf.mdio_clk, AM33XX_CTRL_REGADDR(0x094c));
-	writel(gmii_sel, AM33XX_CTRL_REGADDR(0x0650));
-	/* sdio */
-	writel(lp_padconf.gpmc_a1, AM33XX_CTRL_REGADDR(0x0844));
-	writel(lp_padconf.gpmc_a2, AM33XX_CTRL_REGADDR(0x0848));
-	writel(lp_padconf.gpmc_a3, AM33XX_CTRL_REGADDR(0x084c));
-	writel(lp_padconf.gpmc_ben1, AM33XX_CTRL_REGADDR(0x0878));
-	writel(lp_padconf.gpmc_csn3, AM33XX_CTRL_REGADDR(0x0888));
-	writel(lp_padconf.gpmc_clk, AM33XX_CTRL_REGADDR(0x088c));
-	/* Uart1 */
-	writel(lp_padconf.uart1_ctsn, AM33XX_CTRL_REGADDR(0x0978));
-	writel(lp_padconf.uart1_rtsn, AM33XX_CTRL_REGADDR(0x097C));
-	writel(lp_padconf.uart1_rxd, AM33XX_CTRL_REGADDR(0x0980));
-	writel(lp_padconf.uart1_txd, AM33XX_CTRL_REGADDR(0x0984));
+	struct am33xx_padconf_regs *temp = am33xx_lp_padconf;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
+		writel(temp->val, AM33XX_CTRL_REGADDR(temp->offset));
 }
 
 static int am33xx_pm_prepare_late(void)

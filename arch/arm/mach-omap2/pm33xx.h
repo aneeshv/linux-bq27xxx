@@ -12,6 +12,8 @@
 #define __ARCH_ARM_MACH_OMAP2_PM33XX_H
 
 #include <mach/hardware.h>	/* XXX Is this the right one to include? */
+#include "control.h"
+#include "mux33xx.h"
 
 #ifndef __ASSEMBLER__
 extern void __iomem *am33xx_get_ram_base(void);
@@ -23,37 +25,52 @@ struct a8_wkup_m3_ipc_data {
 	int ipc_data2;
 } am33xx_lp_ipc;
 
-struct am33xx_padconf {
-	int	mii1_col;
-	int	mii1_crs;
-	int	mii1_rxerr;
-	int	mii1_txen;
-	int	mii1_rxdv;
-	int	mii1_txd3;
-	int	mii1_txd2;
-	int	mii1_txd1;
-	int	mii1_txd0;
-	int	mii1_txclk;
-	int	mii1_rxclk;
-	int	mii1_rxd3;
-	int	mii1_rxd2;
-	int	mii1_rxd1;
-	int	mii1_rxd0;
-	int	rmii1_refclk;
-	int	mdio_data;
-	int	mdio_clk;
-	/* sdio pads */
-	int	gpmc_a1; 
-	int	gpmc_a2; 
-	int	gpmc_a3; 
-	int	gpmc_ben1;
-	int	gpmc_csn3;
-	int	gpmc_clk;
-	/* uart1 */
-	int	uart1_ctsn;
-	int	uart1_rtsn;
-	int	uart1_rxd;
-	int	uart1_txd;
+struct am33xx_padconf_regs {
+	u16 offset;
+	u32 val;
+};
+
+static struct am33xx_padconf_regs am33xx_lp_padconf[] = {
+	{.offset = AM33XX_CONTROL_GMII_SEL_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A0_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A1_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A2_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A3_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A4_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A5_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A6_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A7_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A8_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A9_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A10_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A11_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_WAIT0_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_WPN_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_BEN1_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_COL_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_CRS_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXERR_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXEN_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXDV_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXD3_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXD2_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXD1_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXD0_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXCLK_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXCLK_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXD3_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXD2_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXD1_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXD0_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_REFCLK_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MDIO_DATA_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MDIO_CLK_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_CSN3_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_CLK_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_UART1_CTSN_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_UART1_RTSN_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_UART1_RXD_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_UART1_TXD_OFFSET},
 };
 #endif /* ASSEMBLER */
 
