@@ -1716,13 +1716,48 @@ static struct lis3lv02d_platform_data lis331dlh_pdata = {
 	.st_max_limits[2] = 750,
 };
 
-static struct i2c_board_info am335x_i2c1_boardinfo[] = {
-	{
-		I2C_BOARD_INFO("tlv320aic3x", 0x1b),
-	},
+static struct i2c_board_info lis331dlh_i2c_boardinfo[] = {
 	{
 		I2C_BOARD_INFO("lis331dlh", 0x18),
 		.platform_data = &lis331dlh_pdata,
+	},
+};
+
+static void lis331dlh_init(int evm_id, int profile)
+{
+	struct i2c_adapter *adapter;
+	struct i2c_client *client;
+	unsigned int i2c_instance;
+
+	switch (evm_id) {
+	case GEN_PURP_EVM:
+		i2c_instance = 2;
+		break;
+	case EVM_SK:
+		i2c_instance = 1;
+		break;
+	default:
+		pr_err("lis331dlh is not supported on this evm (%d)\n", evm_id);
+		return;
+	}
+
+	/* I2C adapter request */
+	adapter = i2c_get_adapter(i2c_instance);
+	if (!adapter) {
+		pr_err("failed to get adapter i2c%u\n", i2c_instance);
+		return;
+	}
+
+	client = i2c_new_device(adapter, lis331dlh_i2c_boardinfo);
+	if (!client)
+		pr_err("failed to register lis331dlh to i2c%u\n", i2c_instance);
+
+	i2c_put_adapter(adapter);
+}
+
+static struct i2c_board_info am335x_i2c1_boardinfo[] = {
+	{
+		I2C_BOARD_INFO("tlv320aic3x", 0x1b),
 	},
 	{
 		I2C_BOARD_INFO("tsl2550", 0x39),
@@ -1739,7 +1774,6 @@ static void i2c1_init(int evm_id, int profile)
 			ARRAY_SIZE(am335x_i2c1_boardinfo));
 	return;
 }
-
 
 static struct at24_platform_data bone_daughter_board_eeprom_info;
 
@@ -2209,6 +2243,7 @@ static struct evm_dev_cfg gen_purp_evm_dev_cfg[] = {
 	{evm_nand_init, DEV_ON_DGHTR_BRD,
 		(PROFILE_ALL & ~PROFILE_2 & ~PROFILE_3)},
 	{i2c1_init,     DEV_ON_DGHTR_BRD, (PROFILE_ALL & ~PROFILE_2)},
+	{lis331dlh_init, DEV_ON_DGHTR_BRD, (PROFILE_ALL & ~PROFILE_2)},
 	{mcasp1_init,	DEV_ON_DGHTR_BRD, (PROFILE_0 | PROFILE_3 | PROFILE_7)},
 	{mmc1_init,	DEV_ON_DGHTR_BRD, PROFILE_2},
 	{mmc2_wl12xx_init,	DEV_ON_BASEBOARD, (PROFILE_0 | PROFILE_3 |
@@ -2272,6 +2307,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{tsc_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{gpio_keys_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
 	{gpio_led_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
+	{lis331dlh_init, DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
