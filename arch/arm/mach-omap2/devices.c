@@ -51,6 +51,7 @@
 #include <plat/config_pwm.h>
 #include <plat/cpu.h>
 #include <plat/gpmc.h>
+#include <plat/am33xx.h>
 
 /* LCD controller similar DA8xx */
 #include <video/da8xx-fb.h>
@@ -1337,14 +1338,10 @@ void am33xx_cpsw_macidfillup(char *eeprommacid0, char *eeprommacid1)
 	return;
 }
 
-#define MII_MODE_ENABLE		0x0
-#define RMII_MODE_ENABLE	0x5
-#define RGMII_MODE_ENABLE	0xA
-#define MAC_MII_SEL		0x650
-
-void am33xx_cpsw_init(void)
+int am33xx_cpsw_init(enum am33xx_cpsw_mac_mode mode, unsigned char *phy_id0,
+		     unsigned char *phy_id1)
 {
-	u32 mac_lo, mac_hi;
+	u32 mac_lo, mac_hi, gmii_sel;
 	u32 i;
 
 	mac_lo = omap_ctrl_readl(TI81XX_CONTROL_MAC_ID0_LO);
@@ -1377,19 +1374,27 @@ void am33xx_cpsw_init(void)
 			am33xx_cpsw_slaves[1].mac_addr[i] = am33xx_macid1[i];
 	}
 
-	if (am33xx_evmid == BEAGLE_BONE_OLD) {
-		__raw_writel(RMII_MODE_ENABLE,
-				AM33XX_CTRL_REGADDR(MAC_MII_SEL));
-	} else if (am33xx_evmid == BEAGLE_BONE_A3) {
-		__raw_writel(MII_MODE_ENABLE,
-				AM33XX_CTRL_REGADDR(MAC_MII_SEL));
-	} else if (am33xx_evmid == IND_AUT_MTR_EVM) {
-		am33xx_cpsw_slaves[0].phy_id = "0:1e";
-		am33xx_cpsw_slaves[1].phy_id = "0:00";
-	} else {
-		__raw_writel(RGMII_MODE_ENABLE,
-				AM33XX_CTRL_REGADDR(MAC_MII_SEL));
+	switch (mode) {
+	case AM33XX_CPSW_MODE_MII:
+		gmii_sel = AM33XX_MII_MODE_EN;
+		break;
+	case AM33XX_CPSW_MODE_RMII:
+		gmii_sel = AM33XX_RMII_MODE_EN;
+		break;
+	case AM33XX_CPSW_MODE_RGMII:
+		gmii_sel = AM33XX_RGMII_MODE_EN;
+		break;
+	default:
+		return -EINVAL;
 	}
+
+	writel(gmii_sel, AM33XX_CTRL_REGADDR(AM33XX_CONTROL_GMII_SEL_OFFSET));
+
+	if (phy_id0 != NULL)
+		am33xx_cpsw_slaves[0].phy_id = phy_id0;
+
+	if (phy_id1 != NULL)
+		am33xx_cpsw_slaves[1].phy_id = phy_id1;
 
 	memcpy(am33xx_cpsw_pdata.mac_addr,
 			am33xx_cpsw_slaves[0].mac_addr, ETH_ALEN);
@@ -1397,6 +1402,8 @@ void am33xx_cpsw_init(void)
 	platform_device_register(&am33xx_cpsw_device);
 	clk_add_alias(NULL, dev_name(&am33xx_cpsw_mdiodevice.dev),
 			NULL, &am33xx_cpsw_device.dev);
+
+	return 0;
 }
 
 #define AM33XX_DCAN_NUM_MSG_OBJS		64

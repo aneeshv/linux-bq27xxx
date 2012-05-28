@@ -2281,6 +2281,8 @@ static void setup_general_purpose_evm(void)
 	pr_info("The board is general purpose EVM in profile %d\n", prof_sel);
 
 	_configure_device(GEN_PURP_EVM, gen_purp_evm_dev_cfg, (1L << prof_sel));
+
+	am33xx_cpsw_init(AM33XX_CPSW_MODE_RGMII, NULL, NULL);
 }
 
 static void setup_ind_auto_motor_ctrl_evm(void)
@@ -2303,6 +2305,7 @@ static void setup_ind_auto_motor_ctrl_evm(void)
 	/* Fillup global evmid */
 	am33xx_evmid_fillup(IND_AUT_MTR_EVM);
 
+	am33xx_cpsw_init(AM33XX_CPSW_MODE_MII, "0:1e", "0:00");
 }
 
 /* BeagleBone < Rev A3 */
@@ -2321,6 +2324,8 @@ static void setup_beaglebone_old(void)
 
 	/* Fill up global evmid */
 	am33xx_evmid_fillup(BEAGLE_BONE_OLD);
+
+	am33xx_cpsw_init(AM33XX_CPSW_MODE_RMII, NULL, NULL);
 }
 
 /* BeagleBone after Rev A3 */
@@ -2338,6 +2343,8 @@ static void setup_beaglebone(void)
 
 	/* Fill up global evmid */
 	am33xx_evmid_fillup(BEAGLE_BONE_A3);
+
+	am33xx_cpsw_init(AM33XX_CPSW_MODE_MII, NULL, NULL);
 }
 
 /* EVM - Starter Kit */
@@ -2349,6 +2356,8 @@ static void setup_starterkit(void)
 	am335x_mmc[0].gpio_wp = -EINVAL;
 
 	_configure_device(EVM_SK, evm_sk_dev_cfg, PROFILE_NONE);
+
+	am33xx_cpsw_init(AM33XX_CPSW_MODE_RGMII, NULL, NULL);
 }
 
 static void am335x_setup_daughter_board(struct memory_accessor *m, void *c)
@@ -2484,11 +2493,6 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 		else
 			goto out;
 	}
-	/* Initialize cpsw after board detection is completed as board
-	 * information is required for configuring phy address and hence
-	 * should be call only after board detection
-	 */
-	am33xx_cpsw_init();
 
 	return;
 

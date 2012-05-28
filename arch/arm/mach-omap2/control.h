@@ -367,6 +367,14 @@
 #define AM33XX_SGX_MASK			(1 << AM33XX_SGX_SHIFT)
 
 /*
+ * CONTROL AM33XX GMII_SEL register for MII mode selection
+ */
+#define AM33XX_CONTROL_GMII_SEL_OFFSET	0x650
+#define AM33XX_MII_MODE_EN		0x0
+#define AM33XX_RMII_MODE_EN		((1 << 0) | (1 << 2))
+#define AM33XX_RGMII_MODE_EN		((0x2 << 0) | (0x2 << 2))
+
+/*
  * CONTROL AM33XX PWMSS_CTRL register to enable time base clock Enable
  */
 
