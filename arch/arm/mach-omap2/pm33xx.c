@@ -60,14 +60,13 @@ static suspend_state_t suspend_state = PM_SUSPEND_ON;
 
 static struct device *mpu_dev;
 static struct omap_mbox *m3_mbox;
-static struct powerdomain *cefuse_pwrdm, *gfx_pwrdm;
+static struct powerdomain *cefuse_pwrdm, *gfx_pwrdm, *per_pwrdm;
 static struct clockdomain *gfx_l3_clkdm, *gfx_l4ls_clkdm;
 
-static int core_suspend_stat = -1;
 static int m3_state = M3_STATE_UNKNOWN;
 
 static int am33xx_ipc_cmd(struct a8_wkup_m3_ipc_data *);
-static int am33xx_verify_lp_state(void);
+static int am33xx_verify_lp_state(int);
 static void am33xx_m3_state_machine_reset(void);
 
 static DECLARE_COMPLETION(a8_m3_sync);
@@ -159,7 +158,7 @@ static int am33xx_pm_suspend(void)
 		clkdm_wakeup(gfx_l4ls_clkdm);
 	}
 
-	core_suspend_stat = ret;
+	ret = am33xx_verify_lp_state(ret);
 
 	return ret;
 }
@@ -250,11 +249,7 @@ static void am33xx_m3_state_machine_reset(void)
 
 static void am33xx_pm_end(void)
 {
-	int ret;
-
 	suspend_state = PM_SUSPEND_ON;
-
-	ret = am33xx_verify_lp_state();
 
 	omap_mbox_enable_irq(m3_mbox, IRQ_RX);
 
@@ -285,7 +280,7 @@ int am33xx_ipc_cmd(struct a8_wkup_m3_ipc_data *data)
 }
 
 /* return 0 if no reset M3 needed, 1 otherwise */
-static int am33xx_verify_lp_state(void)
+static int am33xx_verify_lp_state(int core_suspend_stat)
 {
 	int status, ret = 0;
 
@@ -300,6 +295,8 @@ static int am33xx_verify_lp_state(void)
 
 	if (status == 0x0) {
 		pr_info("Successfully transitioned all domains to low power state\n");
+		if (am33xx_lp_ipc.sleep_mode == DS0_ID)
+			per_pwrdm->ret_logic_off_counter++;
 		goto clear_old_status;
 	} else if (status == 0x10000) {
 		pr_err("Could not enter low power state\n"
@@ -504,21 +501,25 @@ static int __init am33xx_pm_init(void)
 	/* CEFUSE domain should be turned off post bootup */
 	cefuse_pwrdm = pwrdm_lookup("cefuse_pwrdm");
 	if (cefuse_pwrdm == NULL)
-		printk(KERN_ERR "Failed to get cefuse_pwrdm\n");
+		pr_err("Failed to get cefuse_pwrdm\n");
 	else
 		pwrdm_set_next_pwrst(cefuse_pwrdm, PWRDM_POWER_OFF);
 
 	gfx_pwrdm = pwrdm_lookup("gfx_pwrdm");
 	if (gfx_pwrdm == NULL)
-		printk(KERN_ERR "Failed to get gfx_pwrdm\n");
+		pr_err("Failed to get gfx_pwrdm\n");
+
+	per_pwrdm = pwrdm_lookup("per_pwrdm");
+	if (per_pwrdm == NULL)
+		pr_err("Failed to get per_pwrdm\n");
 
 	gfx_l3_clkdm = clkdm_lookup("gfx_l3_clkdm");
 	if (gfx_l3_clkdm == NULL)
-		printk(KERN_ERR "Failed to get gfx_l3_clkdm\n");
+		pr_err("Failed to get gfx_l3_clkdm\n");
 
 	gfx_l4ls_clkdm = clkdm_lookup("gfx_l4ls_gfx_clkdm");
 	if (gfx_l4ls_clkdm == NULL)
-		printk(KERN_ERR "Failed to get gfx_l4ls_gfx_clkdm\n");
+		pr_err("Failed to get gfx_l4ls_gfx_clkdm\n");
 
 	mpu_dev = omap_device_get_by_hwmod_name("mpu");
 
