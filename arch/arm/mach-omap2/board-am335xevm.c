@@ -434,13 +434,6 @@ static struct lcd_cape_eeprom_config cape_eeprom_config;
 
 static bool daughter_brd_detected;
 
-#define GP_EVM_REV_IS_1_0		0x1
-#define GP_EVM_REV_IS_1_1A		0x2
-#define GP_EVM_REV_IS_UNKNOWN		0xFF
-static unsigned int gp_evm_revision = GP_EVM_REV_IS_UNKNOWN;
-
-unsigned int gigabit_enable = 1;
-
 #define EEPROM_MAC_ADDRESS_OFFSET	60 /* 4+8+4+12+32 */
 #define EEPROM_NO_OF_MAC_ADDR		3
 static char am335x_mac_addr[EEPROM_NO_OF_MAC_ADDR][ETH_ALEN];
@@ -1098,6 +1091,8 @@ struct wl12xx_platform_data am335xevm_wlan_data = {
 #else
 	.board_ref_clock = WL12XX_REFCLOCK_38_XTAL, /* 38.4Mhz */
 #endif
+	.bt_enable_gpio = GPIO_TO_PIN(3, 21),
+	.wlan_enable_gpio = GPIO_TO_PIN(1, 16),
 };
 
 /* Module pin mux for wlan and bluetooth */
@@ -1119,17 +1114,10 @@ static struct pinmux_config uart1_wl12xx_pin_mux[] = {
 	{NULL, 0},
 };
 
-static struct pinmux_config wl12xx_pin_mux_evm_rev1_1a[] = {
+static struct pinmux_config wl12xx_pin_mux[] = {
 	{"gpmc_a0.gpio1_16", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
 	{"mcasp0_ahclkr.gpio3_17", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
 	{"mcasp0_ahclkx.gpio3_21", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT_PULLUP},
-	{NULL, 0},
- };
-
-static struct pinmux_config wl12xx_pin_mux_evm_rev1_0[] = {
-	{"gpmc_csn1.gpio1_30", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
-	{"mcasp0_ahclkr.gpio3_17", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
-	{"gpmc_csn2.gpio1_31", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT_PULLUP},
 	{NULL, 0},
  };
 
@@ -1942,16 +1930,6 @@ static void wl12xx_init(int evm_id, int profile)
 	struct omap_mmc_platform_data *pdata;
 	int ret;
 
-	/* Register WLAN and BT enable pins based on the evm board revision */
-	if (gp_evm_revision == GP_EVM_REV_IS_1_1A) {
-		am335xevm_wlan_data.wlan_enable_gpio = GPIO_TO_PIN(1, 16);
-		am335xevm_wlan_data.bt_enable_gpio = GPIO_TO_PIN(3, 21);
-	}
-	else {
-		am335xevm_wlan_data.wlan_enable_gpio = GPIO_TO_PIN(1, 30);
-		am335xevm_wlan_data.bt_enable_gpio = GPIO_TO_PIN(1, 31);
-	}
-
 	wl12xx_bluetooth_enable();
 
 	if (wl12xx_set_platform_data(&am335xevm_wlan_data))
@@ -1976,10 +1954,7 @@ static void wl12xx_init(int evm_id, int profile)
 		goto out;
 	}
 
-	if (gp_evm_revision == GP_EVM_REV_IS_1_1A)
-		setup_pin_mux(wl12xx_pin_mux_evm_rev1_1a);
-	else
-		setup_pin_mux(wl12xx_pin_mux_evm_rev1_0);
+	setup_pin_mux(wl12xx_pin_mux);
 
 	pdata->slots[0].set_power = wl12xx_set_power;
 out:
@@ -2305,20 +2280,6 @@ static void setup_general_purpose_evm(void)
 	u32 prof_sel = am335x_get_profile_selection();
 	pr_info("The board is general purpose EVM in profile %d\n", prof_sel);
 
-	if (!strncmp("1.1A", config.version, 4)) {
-		gp_evm_revision = GP_EVM_REV_IS_1_1A;
-	} else if (!strncmp("1.0", config.version, 3)) {
-		gp_evm_revision = GP_EVM_REV_IS_1_0;
-	} else {
-		pr_err("Found invalid GP EVM revision, falling back to Rev1.1A");
-		gp_evm_revision = GP_EVM_REV_IS_1_1A;
-	}
-
-	if (gp_evm_revision == GP_EVM_REV_IS_1_0)
-		gigabit_enable = 0;
-	else if (gp_evm_revision == GP_EVM_REV_IS_1_1A)
-		gigabit_enable = 1;
-
 	_configure_device(GEN_PURP_EVM, gen_purp_evm_dev_cfg, (1L << prof_sel));
 }
 
@@ -2527,7 +2488,7 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 	 * information is required for configuring phy address and hence
 	 * should be call only after board detection
 	 */
-	am33xx_cpsw_init(gigabit_enable);
+	am33xx_cpsw_init();
 
 	return;
 

@@ -1342,7 +1342,7 @@ void am33xx_cpsw_macidfillup(char *eeprommacid0, char *eeprommacid1)
 #define RGMII_MODE_ENABLE	0xA
 #define MAC_MII_SEL		0x650
 
-void am33xx_cpsw_init(unsigned int gigen)
+void am33xx_cpsw_init(void)
 {
 	u32 mac_lo, mac_hi;
 	u32 i;
@@ -1390,8 +1390,6 @@ void am33xx_cpsw_init(unsigned int gigen)
 		__raw_writel(RGMII_MODE_ENABLE,
 				AM33XX_CTRL_REGADDR(MAC_MII_SEL));
 	}
-
-	am33xx_cpsw_pdata.gigabit_en = gigen;
 
 	memcpy(am33xx_cpsw_pdata.mac_addr,
 			am33xx_cpsw_slaves[0].mac_addr, ETH_ALEN);
