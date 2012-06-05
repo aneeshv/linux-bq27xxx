@@ -260,6 +260,25 @@ static struct snd_platform_data am335x_evm_snd_data1 = {
 	.rxnumevt	= 1,
 };
 
+static u8 am335x_evm_sk_iis_serializer_direction1[] = {
+	INACTIVE_MODE,	INACTIVE_MODE,	TX_MODE,	INACTIVE_MODE,
+	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,
+	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,
+	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,
+};
+
+static struct snd_platform_data am335x_evm_sk_snd_data1 = {
+	.tx_dma_offset	= 0x46400000,	/* McASP1 */
+	/*.rx_dma_offset	= 0x46400000,*/
+	.op_mode	= DAVINCI_MCASP_IIS_MODE,
+	.num_serializer	= ARRAY_SIZE(am335x_evm_sk_iis_serializer_direction1),
+	.tdm_slots	= 2,
+	.serial_dir	= am335x_evm_sk_iis_serializer_direction1,
+	.asp_chan_q	= EVENTQ_2,
+	.version	= MCASP_VERSION_3,
+	.txnumevt	= 1,
+};
+
 static struct omap2_hsmmc_info am335x_mmc[] __initdata = {
 	{
 		.mmc            = 1,
@@ -1893,7 +1912,14 @@ static void mcasp1_init(int evm_id, int profile)
 {
 	/* Configure McASP */
 	setup_pin_mux(mcasp1_pin_mux);
-	am335x_register_mcasp(&am335x_evm_snd_data1, 1);
+	switch (evm_id) {
+	case EVM_SK:
+		am335x_register_mcasp(&am335x_evm_sk_snd_data1, 1);
+		break;
+	default:
+		am335x_register_mcasp(&am335x_evm_snd_data1, 1);
+	}
+
 	return;
 }
 
@@ -2404,6 +2430,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{gpio_keys_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
 	{gpio_led_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
 	{lis331dlh_init, DEV_ON_BASEBOARD, PROFILE_ALL},
+	{mcasp1_init,   DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
@@ -2740,6 +2767,9 @@ static struct i2c_board_info __initdata am335x_i2c0_boardinfo[] = {
 	{
 		I2C_BOARD_INFO("tps65910", TPS65910_I2C_ID1),
 		.platform_data  = &am335x_tps65910_info,
+	},
+	{
+		I2C_BOARD_INFO("tlv320aic3x", 0x1b),
 	},
 };
 
