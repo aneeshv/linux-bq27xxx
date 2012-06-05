@@ -280,6 +280,16 @@ static struct omap2_hsmmc_info am335x_mmc[] __initdata = {
 
 #ifdef CONFIG_OMAP_MUX
 static struct omap_board_mux board_mux[] __initdata = {
+	/*
+	 * Setting SYSBOOT[5] should set xdma_event_intr0 pin to mode 3 thereby
+	 * allowing clkout1 to be available on xdma_event_intr0.
+	 * However, on some boards (like EVM-SK), SYSBOOT[5] isn't properly
+	 * latched.
+	 * To be extra cautious, setup the pin-mux manually.
+	 * If any modules/usecase requries it in different mode, then subsequent
+	 * module init call will change the mux accordingly.
+	 */
+	AM33XX_MUX(XDMA_EVENT_INTR0, OMAP_MUX_MODE3 | AM33XX_PIN_OUTPUT),
 	AM33XX_MUX(I2C0_SDA, OMAP_MUX_MODE0 | AM33XX_SLEWCTRL_SLOW |
 			AM33XX_INPUT_EN | AM33XX_PIN_OUTPUT),
 	AM33XX_MUX(I2C0_SCL, OMAP_MUX_MODE0 | AM33XX_SLEWCTRL_SLOW |
