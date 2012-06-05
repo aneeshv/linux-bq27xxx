@@ -115,17 +115,14 @@ static int am33xx_pm_suspend(void)
 {
 	int state, ret = 0;
 
-	struct omap_hwmod *cpgmac_oh, *gpmc_oh, *usb_oh;
+	struct omap_hwmod *gpmc_oh, *usb_oh;
 
-	cpgmac_oh	= omap_hwmod_lookup("cpgmac0");
 	usb_oh		= omap_hwmod_lookup("usb_otg_hs");
 	gpmc_oh		= omap_hwmod_lookup("gpmc");
 
-	omap_hwmod_enable(cpgmac_oh);
 	omap_hwmod_enable(usb_oh);
 	omap_hwmod_enable(gpmc_oh);
 
-	omap_hwmod_idle(cpgmac_oh);
 	omap_hwmod_idle(usb_oh);
 	omap_hwmod_idle(gpmc_oh);
 
