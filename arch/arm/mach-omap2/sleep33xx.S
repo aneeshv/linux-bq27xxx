@@ -29,9 +29,25 @@
 #include "prm33xx.h"
 #include "control.h"
 
-/* We should probably pass in the virtual address of PRCM, Control and EMIF
- * along with the physical addresses
- * load it into the registers and then continue
+/*
+ * We should probably pass in the virtual address of PRCM, Control and EMIF
+ * along with the physical addresses, load it into the registers
+ * and then continue.
+ *
+ * This routine is executed from internal RAM and expects the memory type and
+ * other DDR configuration values which are different across different memory
+ * types to be passed in r0 _strictly_ in following order:
+ * 1) memory_type [r0]
+ * 2) susp_vtp_ctrl_val [r1]
+ *
+ * The code loads these values taking r0 value as reference to the array in
+ * registers starting from r0, i,e memory_type goes to r0 and susp_vtp_ctrl_val
+ * goes to r1. These are then saved into memory locations before proceeding
+ * with the sleep sequence and hence registers r0,r1 can still be used in the
+ * rest of the sleep code.
+ *
+ * mem_type is used to decide different suspend-resume sequences for DDR2
+ * and DDR3.
  */
 	.align 3
 ENTRY(am33xx_do_wfi)
@@ -69,11 +85,57 @@ pll_mode_restored_\name:
 	nop
 	.endm
 
+	.macro	ddr_self_refresh, num
+ddr_self_refresh_\num:
+	add	r1, r0, #EMIF4_0_SDRAM_MGMT_CTRL
+	ldr	r2, [r1]
+	orr	r2, r2, #0xa0		@ a reasonable delay for entering SR
+	str	r2, [r1, #0]
+	str	r2, [r1, #4]		@ write to shadow register also
+
+	ldr	r2, ddr_start		@ do a dummy access to DDR
+	ldr	r3, [r2, #0]
+	ldr	r3, [r1, #0]
+	orr	r3, r3, #0x200		@ now set the LP MODE to Self-Refresh
+	str	r3, [r1, #0]
+
+	mov	r1, #0x1000		@ Give some time for system to enter SR
+wait_sr_\num:
+	subs	r1, r1, #1
+	bne	wait_sr_\num
+	.endm
+
+	.macro	wait_sdram_config ,num
+wait_sdram_config_\num:
+	mov	r0, #0x100
+wait_sc_\num:
+	subs	r0, r0 ,#1
+	bne	wait_sc_\num
+	.endm
+
+	mov	r8, r0			@ same arg list passed to us
+
 	/* EMIF config for low power mode */
 	ldr	r0, emif_addr_func
 	blx	r0
 
 	str	r0, emif_addr_virt
+
+	/* This ensures isb */
+	ldr	r0, dcache_flush
+	blx	r0
+
+	/* Same as v7_flush_icache_all - saving a branch */
+	mov	r0, #0
+	mcr	p15, 0, r0, c7, c5, 0	@ I+BTB cache invalidate
+
+	ldm	r8, {r0-r1}		@ gather values passed
+
+	/* Save the values passed */
+	str	r0, mem_type
+	str	r1, susp_vtp_ctrl_val
+
+	ldr	r0, emif_addr_virt
 
 	/* Save EMIF configuration */
 	ldr	r1, [r0, #EMIF4_0_SDRAM_CONFIG]
@@ -100,22 +162,86 @@ pll_mode_restored_\name:
 	dmb
 	isb
 
-	add	r1, r0, #EMIF4_0_SDRAM_MGMT_CTRL
+	/* Different sleep sequences for DDR2 and DDR3 */
+	ldr	r6, mem_type
+	cmp	r6, #MEM_TYPE_DDR2
+	beq	ddr2_susp_seq
+
+	/* DDR3 suspend sequence */
+
+	/* For DDR3, hold DDR_RESET high via control module */
+	ldr	r2, virt_ddr_io_ctrl
+	ldr	r1, [r2]
+	mov	r3,#1
+	mov	r3,r3,lsl #31
+	orr	r1,r1,r3		@ set ddr3_rst_def_val
+	str	r1, [r2]
+
+	ddr_self_refresh	1
+
+	/* Weak pull down for macro DATA0 */
+	ldr	r1, virt_ddr_data0_ioctrl
+	ldr	r2, susp_io_pull_data
+	str	r2, [r1]
+
+	/* Weak pull down for macro DATA1 */
+	ldr	r1, virt_ddr_data1_ioctrl
+	ldr	r2, susp_io_pull_data
+	str	r2, [r1]
+
+	/* Weak pull down for macro CMD0 */
+	ldr	r1, virt_ddr_cmd0_ioctrl
+	ldr	r2, susp_io_pull_cmd1
+	str	r2, [r1]
+
+	/* Weak pull down for macro CMD1 */
+	ldr	r1, virt_ddr_cmd1_ioctrl
+	ldr	r2, susp_io_pull_cmd1
+	str	r2, [r1]
+
+	/*
+	 * Weak pull down for macro CMD2
+	 * exception: keep DDR_RESET pullup
+	 */
+	ldr	r1, virt_ddr_cmd2_ioctrl
+	ldr	r2, susp_io_pull_cmd2
+	str	r2, [r1]
+
+	/* Disable VTP */
+	ldr	r1, virt_ddr_vtp_ctrl
+	ldr	r2, susp_vtp_ctrl_val
+	str	r2, [r1]
+
+	/* Put IO in mDDR (cmos) mode */
+	ldr	r0, virt_ddr_io_ctrl
+	ldr	r1, [r0]
+	mov	r2, #(0x1 << 28)
+	orr	r3,r2,r1
+	str	r3, [r0]
+
+	/* Disable EMIF at this point */
+	ldr	r1, virt_emif_clkctrl
 	ldr	r2, [r1]
-	orr	r2, r2, #0xa0		@ a reasonable delay for entering SR
-	str	r2, [r1, #0]
-	str	r2, [r1, #4]		@ write to shadow register also
+	bic	r2, r2, #(3 << 0)
+	str	r2, [r1]
 
-	ldr	r2, ddr_start		@ do a dummy access to DDR
-	ldr	r3, [r2, #0]
-	ldr	r3, [r1, #0]
-	orr	r3, r3, #0x200		@ now set the LP MODE to Self-Refresh
-	str	r3, [r1, #0]
+	ldr	r1, virt_emif_clkctrl
+wait_emif_disable3:
+	ldr	r2, [r1]
+	ldr	r3, module_disabled_val
+	cmp	r2, r3
+	bne	wait_emif_disable3
 
-	mov	r1, #0x1000		@ Give some time for the system to enter SR
-wait_sr:
-	subs	r1, r1, #1
-	bne	wait_sr
+	/* Enable SRAM LDO ret mode */
+	ldr	r0, virt_sram_ldo_addr
+	ldr	r1, [r0]
+	orr	r1, #1
+	str	r1, [r0]
+
+	b	put_pll_bypass
+
+ddr2_susp_seq:
+	ddr_self_refresh	2
 
 	/* Disable EMIF at this point */
 	ldr	r1, virt_emif_clkctrl
@@ -137,14 +263,14 @@ wait_emif_disable:
 
 	/* Weak pull down for DQ, DM */
 	ldr	r1, virt_ddr_io_pull1
-	ldr	r2, susp_io_pull
+	ldr	r2, susp_io_pull_data
 	str	r2, [r1]
 
 	ldr	r1, virt_ddr_io_pull2
-	ldr	r2, susp_io_pull
+	ldr	r2, susp_io_pull_data
 	str	r2, [r1]
 
-	/* Disable VTP with N & P = 0x1 */
+	/* Disable VTP */
 	ldr	r1, virt_ddr_vtp_ctrl
 	ldr	r2, susp_vtp_ctrl_val
 	str	r2, [r1]
@@ -155,6 +281,7 @@ wait_emif_disable:
 	orr	r1, #1
 	str	r1, [r0]
 
+put_pll_bypass:
 	/* Put the PLLs in bypass mode */
 	pll_bypass	core, virt_core_clk_mode, virt_core_idlest, core_val
 	pll_bypass	ddr, virt_ddr_clk_mode, virt_ddr_idlest, ddr_val
@@ -190,6 +317,87 @@ wait_emif_disable:
 	pll_lock	ddr_abt, virt_ddr_clk_mode, virt_ddr_idlest, ddr_val
 	pll_lock	core_abt, virt_core_clk_mode, virt_core_idlest, core_val
 
+	ldr	r6, mem_type
+	cmp	r6, #MEM_TYPE_DDR2
+	beq	ddr2_resume_seq_abt
+
+	/* DDR3 resume path */
+
+	/* Disable SRAM LDO ret mode */
+	ldr	r0, virt_sram_ldo_addr
+	ldr	r1, [r0]
+	bic	r1, #1
+	str	r1, [r0]
+
+	/* Enable EMIF */
+	ldr	r1, virt_emif_clkctrl
+	mov	r2, #0x2
+	str	r2, [r1]
+wait_emif_enable3:
+	ldr	r3, [r1]
+	cmp	r2, r3
+	bne	wait_emif_enable3
+
+	/* Take out IO of mDDR mode */
+	ldr	r0, virt_ddr_io_ctrl
+	ldr	r1, [r0]
+	bic	r1, r1, #28
+	str	r1, [r0]
+
+	/* Enable VTP */
+config_vtp_abt3:
+	ldr	r0, virt_ddr_vtp_ctrl
+	ldr	r1, [r0]
+	mov	r2, #0x0	@ clear the register
+	str	r2, [r0]
+	mov	r2, #0x6	@ write the filter value
+	str	r2, [r0]
+
+	ldr	r1, [r0]
+	ldr	r2, vtp_enable	@ set the enable bit
+	orr	r2, r2, r1
+	str	r2, [r0]
+
+	ldr	r1, [r0]	@ toggle the CLRZ bit
+	bic	r1, #1
+	str	r1, [r0]
+
+	ldr	r1, [r0]
+	orr	r1, #1
+	str	r1, [r0]
+
+poll_vtp_ready_abt3:
+	ldr	r1, [r0]	@ poll for VTP ready
+	tst	r1, #(1 << 5)
+	beq	poll_vtp_ready_abt3
+
+	/*	Disable the pull for CMD2 */
+	ldr	r1, virt_ddr_cmd2_ioctrl
+	ldr	r2, resume_io_pull_cmd
+	str	r2, [r1]
+	/*	Disable the pull for CMD1 */
+	ldr	r1, virt_ddr_cmd1_ioctrl
+	ldr	r2, resume_io_pull_cmd
+	str	r2, [r1]
+	/*	Disable the pull for CMD0 */
+	ldr	r1, virt_ddr_cmd0_ioctrl
+	ldr	r2, resume_io_pull_cmd
+	str	r2, [r1]
+	/*	Disable the pull for DATA1 */
+	ldr	r1, virt_ddr_data1_ioctrl
+	ldr	r2, resume_io_pull_data
+	str	r2, [r1]
+	/*	Disable the pull for DATA0 */
+	ldr	r1, virt_ddr_data0_ioctrl
+	ldr	r2, resume_io_pull_data
+	str	r2, [r1]
+
+	wait_sdram_config	1
+
+	b	emif_self_refresh_dis
+
+	/* DDR2 resume path */
+ddr2_resume_seq_abt:
 	/* Disable SRAM LDO ret mode */
 	ldr	r0, virt_sram_ldo_addr
 	ldr	r1, [r0]
@@ -198,11 +406,11 @@ wait_emif_disable:
 
 	/* Restore the pull for DQ, DM */
 	ldr	r1, virt_ddr_io_pull1
-	ldr	r2, resume_io_pull1
+	ldr	r2, resume_io_pull_data
 	str	r2, [r1]
 
 	ldr	r1, virt_ddr_io_pull2
-	ldr	r2, resume_io_pull2
+	ldr	r2, resume_io_pull_data
 	str	r2, [r1]
 
 	/* Enable EMIF */
@@ -246,6 +454,7 @@ poll_vtp_ready_abt:
 	mov	r1, #0
 	str	r1, [r0]
 
+emif_self_refresh_dis:
 	/* Disable EMIF self-refresh */
 	ldr	r0, emif_addr_virt
 	add	r0, r0, #EMIF4_0_SDRAM_MGMT_CTRL
@@ -267,6 +476,78 @@ ENTRY(am33xx_resume_from_deep_sleep)
 	pll_lock	ddr, phys_ddr_clk_mode, phys_ddr_idlest, ddr_val
 	pll_lock	core, phys_core_clk_mode, phys_core_idlest, core_val
 
+	ldr	r6, mem_type
+	cmp	r6, #MEM_TYPE_DDR2
+	beq	ddr2_resume_seq
+
+	/* DDR3 resume path */
+
+	/* Disable SRAM LDO ret mode */
+	ldr	r0, phys_sram_ldo_addr
+	ldr	r1, [r0]
+	bic	r1, #1
+	str	r1, [r0]
+
+	/* TODO: Put EMIF enable here */
+
+	/* Take out IO of mDDR mode */
+	ldr	r0, phys_ddr_io_ctrl
+	ldr	r1, [r0]
+	bic	r1, r1, #28
+	str	r1, [r0]
+
+config_vtp3:
+	ldr	r0, phys_ddr_vtp_ctrl
+	ldr	r1, [r0]
+	mov	r2, #0x0	@ clear the register
+	str	r2, [r0]
+	mov	r2, #0x6	@ write the filter value
+	str	r2, [r0]
+
+	ldr	r1, [r0]
+	ldr	r2, vtp_enable	@ set the enable bit
+	orr	r2, r2, r1
+	str	r2, [r0]
+
+	ldr	r1, [r0]	@ toggle the CLRZ bit
+	bic	r1, #1
+	str	r1, [r0]
+
+	ldr	r1, [r0]
+	orr	r1, #1
+	str	r1, [r0]
+poll_vtp_ready3:
+	ldr	r1, [r0]	@ poll for VTP ready
+	tst	r1, #(1 << 5)
+	beq	poll_vtp_ready3
+
+	/*	Disable the pull for CMD2 */
+	ldr	r1, phys_ddr_cmd2_ioctrl
+	ldr	r2, resume_io_pull_cmd
+	str	r2, [r1]
+	/*	Disable the pull for CMD1 */
+	ldr	r1, phys_ddr_cmd1_ioctrl
+	ldr	r2, resume_io_pull_cmd
+	str	r2, [r1]
+	/*	Disable the pull for CMD0 */
+	ldr	r1, phys_ddr_cmd0_ioctrl
+	ldr	r2, resume_io_pull_cmd
+	str	r2, [r1]
+	/*	Disable the pull for DATA1 */
+	ldr	r1, phys_ddr_data1_ioctrl
+	ldr	r2, resume_io_pull_data
+	str	r2, [r1]
+	/*	Disable the pull for DATA0 */
+	ldr	r1, phys_ddr_data0_ioctrl
+	ldr	r2, resume_io_pull_data
+	str	r2, [r1]
+
+	wait_sdram_config	2
+
+	b	config_emif_timings
+
+	/* DDR2 resume path */
+ddr2_resume_seq:
 	/* Disable SRAM LDO ret mode */
 	ldr	r0, phys_sram_ldo_addr
 	ldr	r1, [r0]
@@ -275,13 +556,12 @@ ENTRY(am33xx_resume_from_deep_sleep)
 
 	/* Restore the pull for DQ, DM */
 	ldr	r1, phys_ddr_io_pull1
-	ldr	r2, resume_io_pull1
+	ldr	r2, resume_io_pull_data
 	str	r2, [r1]
 
 	ldr	r1, phys_ddr_io_pull2
-	ldr	r2, resume_io_pull2
+	ldr	r2, resume_io_pull_data
 	str	r2, [r1]
-
 
 config_vtp:
 	ldr	r0, phys_ddr_vtp_ctrl
@@ -376,6 +656,8 @@ ENTRY(am33xx_resume_vector)
  * Local variables
  */
 
+dcache_flush:
+	.word   v7_flush_dcache_all
 resume_addr:
 	.word	cpu_resume - PAGE_OFFSET + 0x80000000
 
@@ -456,6 +738,26 @@ virt_ddr_vtp_ctrl:
 	.word	AM33XX_CTRL_REGADDR(0x0E0C)
 phys_ddr_vtp_ctrl:
 	.word	VTP0_CTRL_REG
+virt_ddr_cmd0_ioctrl:
+	.word	AM33XX_CTRL_REGADDR(0x1404)
+phys_ddr_cmd0_ioctrl:
+	.word	DDR_CMD0_IOCTRL
+virt_ddr_cmd1_ioctrl:
+	.word	AM33XX_CTRL_REGADDR(0x1408)
+phys_ddr_cmd1_ioctrl:
+	.word	DDR_CMD1_IOCTRL
+virt_ddr_cmd2_ioctrl:
+	.word	AM33XX_CTRL_REGADDR(0x140C)
+phys_ddr_cmd2_ioctrl:
+	.word	DDR_CMD2_IOCTRL
+virt_ddr_data0_ioctrl:
+	.word	AM33XX_CTRL_REGADDR(0x1440)
+phys_ddr_data0_ioctrl:
+	.word	DDR_DATA0_IOCTRL
+virt_ddr_data1_ioctrl:
+	.word	AM33XX_CTRL_REGADDR(0x1444)
+phys_ddr_data1_ioctrl:
+	.word	DDR_DATA1_IOCTRL
 vtp_enable:
 	.word	VTP_CTRL_ENABLE
 
@@ -472,14 +774,22 @@ virt_ddr_io_pull3:
 phys_ddr_io_pull3:
 	.word	AM33XX_CTRL_BASE + (0x1448)
 
-susp_io_pull:
+susp_io_pull_data:
 	.word	0x3FF00003
-resume_io_pull1:
+susp_io_pull_cmd1:
+	.word   0xFFE0018B
+susp_io_pull_cmd2:
+	.word   0xFFA0098B
+
+resume_io_pull_data:
 	.word	0x18B
-resume_io_pull2:
-	.word	0x18B
+resume_io_pull_cmd:
+	.word	0x4
+
 susp_vtp_ctrl_val:
-	.word	0x10117
+	.word	0xDEADBEEF
+mem_type:
+	.word	0xDEADBEEF
 emif_addr_virt:
 	.word	0xDEADBEEF
 emif_rd_lat_val:

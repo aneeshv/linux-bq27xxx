@@ -31,6 +31,7 @@
 #include <plat/sram.h>
 #include <plat/omap_hwmod.h>
 #include <plat/omap_device.h>
+#include <plat/emif.h>
 
 #include <asm/suspend.h>
 #include <asm/proc-fns.h>
@@ -43,17 +44,17 @@
 #include "clockdomain.h"
 #include "powerdomain.h"
 
-void (*am33xx_do_wfi_sram)(void);
+void (*am33xx_do_wfi_sram)(u32 *);
 
 #define DS_MODE		DS0_ID	/* DS0/1_ID */
 #define MODULE_DISABLE	0x0
 #define MODULE_ENABLE	0x2
 
 #ifdef CONFIG_SUSPEND
-
 void __iomem *ipc_regs;
 void __iomem *m3_eoi;
 void __iomem *m3_code;
+u32 suspend_cfg_param_list[SUSPEND_CFG_PARAMS_END];
 
 bool enable_deep_sleep = true;
 static suspend_state_t suspend_state = PM_SUSPEND_ON;
@@ -105,7 +106,8 @@ static void am33xx_pm_finish(void)
 
 static int am33xx_do_sram_idle(long unsigned int state)
 {
-	am33xx_do_wfi_sram();
+	am33xx_do_wfi_sram(&suspend_cfg_param_list[0]);
+
 	return 0;
 }
 
@@ -483,17 +485,35 @@ static int __init clkdms_setup(struct clockdomain *clkdm, void *unused)
  */
 void am33xx_push_sram_idle(void)
 {
-	am33xx_do_wfi_sram = omap_sram_push(am33xx_do_wfi, am33xx_do_wfi_sz);
+	am33xx_do_wfi_sram = (void *)omap_sram_push
+					(am33xx_do_wfi, am33xx_do_wfi_sz);
 }
 
 static int __init am33xx_pm_init(void)
 {
 	int ret;
+	void __iomem *base;
+	u32 reg;
 
 	if (!cpu_is_am33xx())
 		return -ENODEV;
 
 	pr_info("Power Management for AM33XX family\n");
+
+/* Read SDRAM_CONFIG register to determine Memory Type */
+	base = am33xx_get_ram_base();
+	reg = readl(base + EMIF4_0_SDRAM_CONFIG);
+	reg &= SDRAM_TYPE ;
+	suspend_cfg_param_list[MEMORY_TYPE] = reg;
+
+/*
+ * vtp_ctrl register value for DDR2 and DDR3 as suggested
+ * by h/w team
+ */
+	if (reg == MEM_TYPE_DDR2)
+		suspend_cfg_param_list[SUSP_VTP_CTRL_VAL] = SUSP_VTP_CTRL_DDR2;
+	else
+		suspend_cfg_param_list[SUSP_VTP_CTRL_VAL] = SUSP_VTP_CTRL_DDR3;
 
 #ifdef CONFIG_SUSPEND
 	(void) clkdm_for_each(clkdms_setup, NULL);
