@@ -81,6 +81,7 @@ static struct omap_hwmod am33xx_gpmc_hwmod;
 static struct omap_hwmod am33xx_lcdc_hwmod;
 static struct omap_hwmod am33xx_mailbox_hwmod;
 static struct omap_hwmod am33xx_cpgmac0_hwmod;
+static struct omap_hwmod am33xx_mdio_hwmod;
 
 /*
  * Interconnects hwmod structures
@@ -458,14 +459,19 @@ static struct omap_hwmod_class_sysconfig am33xx_cpgmac_sysc = {
 };
 
 static struct omap_hwmod_class am33xx_cpgmac0_hwmod_class = {
-	.name		= "cpgmac0",
+	.name		= "cpsw",
 	.sysc		= &am33xx_cpgmac_sysc,
 };
 
 struct omap_hwmod_addr_space am33xx_cpgmac0_addr_space[] = {
 	{
+		.pa_start	= 0x4A100000,
+		.pa_end		= 0x4A100000 + SZ_2K - 1,
+		.flags		= ADDR_MAP_ON_INIT,
+	},
+	{
 		.pa_start	= 0x4A101200,
-		.pa_end		= 0x4A101200 + SZ_8K - 1,
+		.pa_end		= 0x4A101200 + SZ_256 - 1,
 		.flags		= ADDR_MAP_ON_INIT | ADDR_TYPE_RT,
 	},
 	{ }
@@ -484,8 +490,8 @@ static struct omap_hwmod_ocp_if *am33xx_cpgmac0_slaves[] = {
 
 static struct omap_hwmod_irq_info am33xx_cpgmac0_irqs[] = {
 	{ .name = "c0_rx_thresh_pend", .irq = 40 },
-	{ .name = "c0_rx_pend", .irq = 41 },
-	{ .name = "c0_tx_pend", .irq = 42 },
+	{ .name = "c0_rx_pend", .irq = 93 },
+	{ .name = "c0_tx_pend", .irq = 94 },
 	{ .name = "c0_misc_pend", .irq = 43 },
 	{ .irq = -1 }
 };
@@ -506,6 +512,40 @@ static struct omap_hwmod am33xx_cpgmac0_hwmod = {
 	.slaves_cnt	= ARRAY_SIZE(am33xx_cpgmac0_slaves),
 	.flags		= (HWMOD_SWSUP_SIDLE | HWMOD_SWSUP_MSTANDBY |
 				HWMOD_INIT_NO_IDLE | HWMOD_INIT_NO_RESET),
+};
+
+/* mdio class */
+static struct omap_hwmod_class am33xx_mdio_hwmod_class = {
+	.name		= "davinci_mdio",
+};
+
+struct omap_hwmod_addr_space am33xx_mdio_addr_space[] = {
+	{
+		.pa_start	= 0x4A101000,
+		.pa_end		= 0x4A101000 + SZ_256 - 1,
+		.flags		= ADDR_MAP_ON_INIT,
+	},
+	{ }
+};
+
+struct omap_hwmod_ocp_if am33xx_cpgmac0__mdio = {
+	.master		= &am33xx_cpgmac0_hwmod,
+	.slave		= &am33xx_mdio_hwmod,
+	.addr		= am33xx_mdio_addr_space,
+	.user		= OCP_USER_MPU,
+};
+
+static struct omap_hwmod_ocp_if *am33xx_mdio_slaves[] = {
+	&am33xx_cpgmac0__mdio,
+};
+
+static struct omap_hwmod am33xx_mdio_hwmod = {
+	.name		= "mdio",
+	.class		= &am33xx_mdio_hwmod_class,
+	.clkdm_name	= "cpsw_125mhz_clkdm",
+	.main_clk	= "cpgmac0_ick",
+	.slaves		= am33xx_mdio_slaves,
+	.slaves_cnt	= ARRAY_SIZE(am33xx_mdio_slaves),
 };
 
 /* 'dcan' class */
@@ -3391,6 +3431,8 @@ static __initdata struct omap_hwmod *am33xx_hwmods[] = {
 	&am33xx_usbss_hwmod,
 	/* cpgmac0 class */
 	&am33xx_cpgmac0_hwmod,
+	/* mdio class */
+	&am33xx_mdio_hwmod,
 	/* tptc class */
 	&am33xx_tptc0_hwmod,
 	&am33xx_tptc1_hwmod,

@@ -1195,7 +1195,6 @@ arch_initcall(omap2_init_devices);
 #define CPSW_PORT_VLAN_SLAVE_0		2
 #define CPSW_PORT_VLAN_SLAVE_1		3
 
-static u64 am33xx_cpsw_dmamask = DMA_BIT_MASK(32);
 /* TODO : Verify the offsets */
 static struct cpsw_slave_data am33xx_cpsw_slaves[] = {
 	{
@@ -1236,67 +1235,6 @@ static struct mdio_platform_data am33xx_cpsw_mdiopdata = {
 	.bus_freq       = AM33XX_EMAC_MDIO_FREQ,
 };
 
-static struct resource am33xx_cpsw_mdioresources[] = {
-	{
-		.start  = AM33XX_CPSW_MDIO_BASE,
-		.end    = AM33XX_CPSW_MDIO_BASE + SZ_256 - 1,
-		.flags  = IORESOURCE_MEM,
-	},
-};
-
-static struct platform_device am33xx_cpsw_mdiodevice = {
-	.name           = "davinci_mdio",
-	.id             = 0,
-	.num_resources  = ARRAY_SIZE(am33xx_cpsw_mdioresources),
-	.resource       = am33xx_cpsw_mdioresources,
-	.dev.platform_data = &am33xx_cpsw_mdiopdata,
-};
-
-static struct resource am33xx_cpsw_resources[] = {
-	{
-		.start  = AM33XX_CPSW_BASE,
-		.end    = AM33XX_CPSW_BASE + SZ_2K - 1,
-		.flags  = IORESOURCE_MEM,
-	},
-	{
-		.start  = AM33XX_CPSW_SS_BASE,
-		.end    = AM33XX_CPSW_SS_BASE + SZ_256 - 1,
-		.flags  = IORESOURCE_MEM,
-	},
-	{
-		.start	= AM33XX_IRQ_CPSW_C0_RX,
-		.end	= AM33XX_IRQ_CPSW_C0_RX,
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.start	= AM33XX_IRQ_DMTIMER5,
-		.end	= AM33XX_IRQ_DMTIMER5,
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.start	= AM33XX_IRQ_DMTIMER6,
-		.end	= AM33XX_IRQ_DMTIMER6,
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.start	= AM33XX_IRQ_CPSW_C0,
-		.end	= AM33XX_IRQ_CPSW_C0,
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-
-static struct platform_device am33xx_cpsw_device = {
-	.name		=	"cpsw",
-	.id		=	0,
-	.num_resources	=	ARRAY_SIZE(am33xx_cpsw_resources),
-	.resource	=	am33xx_cpsw_resources,
-	.dev		=	{
-					.platform_data	= &am33xx_cpsw_pdata,
-					.dma_mask	= &am33xx_cpsw_dmamask,
-					.coherent_dma_mask = DMA_BIT_MASK(32),
-				},
-};
-
 static unsigned char  am33xx_macid0[ETH_ALEN];
 static unsigned char  am33xx_macid1[ETH_ALEN];
 
@@ -1327,6 +1265,8 @@ void am33xx_cpsw_macidfillup(char *eeprommacid0, char *eeprommacid1)
 int am33xx_cpsw_init(enum am33xx_cpsw_mac_mode mode, unsigned char *phy_id0,
 		     unsigned char *phy_id1)
 {
+	struct omap_hwmod *oh;
+	struct platform_device *pdev;
 	u32 mac_lo, mac_hi, gmii_sel;
 	u32 i;
 
@@ -1384,10 +1324,28 @@ int am33xx_cpsw_init(enum am33xx_cpsw_mac_mode mode, unsigned char *phy_id0,
 
 	memcpy(am33xx_cpsw_pdata.mac_addr,
 			am33xx_cpsw_slaves[0].mac_addr, ETH_ALEN);
-	platform_device_register(&am33xx_cpsw_mdiodevice);
-	platform_device_register(&am33xx_cpsw_device);
-	clk_add_alias(NULL, dev_name(&am33xx_cpsw_mdiodevice.dev),
-			NULL, &am33xx_cpsw_device.dev);
+
+	oh = omap_hwmod_lookup("mdio");
+	if (!oh) {
+		pr_err("could not find cpgmac0 hwmod data\n");
+		return -ENODEV;
+	}
+
+	pdev = omap_device_build("davinci_mdio", 0, oh, &am33xx_cpsw_mdiopdata,
+			sizeof(am33xx_cpsw_mdiopdata), NULL, 0, 0);
+	if (IS_ERR(pdev))
+		pr_err("could not build omap_device for cpsw\n");
+
+	oh = omap_hwmod_lookup("cpgmac0");
+	if (!oh) {
+		pr_err("could not find cpgmac0 hwmod data\n");
+		return -ENODEV;
+	}
+
+	pdev = omap_device_build("cpsw", -1, oh, &am33xx_cpsw_pdata,
+			sizeof(am33xx_cpsw_pdata), NULL, 0, 0);
+	if (IS_ERR(pdev))
+		pr_err("could not build omap_device for cpsw\n");
 
 	return 0;
 }
