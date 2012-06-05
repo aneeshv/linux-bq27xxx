@@ -26,6 +26,7 @@
 #include <linux/workqueue.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <linux/pm_runtime.h>
 
 #include <linux/cpsw.h>
 #include <plat/dmtimer.h>
@@ -818,12 +819,6 @@ static int cpsw_ndo_open(struct net_device *ndev)
 		cpsw_intr_disable(priv);
 	netif_carrier_off(ndev);
 
-	ret = clk_enable(priv->clk);
-	if (ret < 0) {
-		dev_err(priv->dev, "unable to turn on device clock\n");
-		return ret;
-	}
-
 	if (priv->data.phy_control)
 		(*priv->data.phy_control)(true);
 
@@ -940,7 +935,6 @@ static int cpsw_ndo_stop(struct net_device *ndev)
 	for_each_slave(priv, cpsw_slave_stop, priv);
 	if (priv->data.phy_control)
 		(*priv->data.phy_control)(false);
-	clk_disable(priv->clk);
 
 	cpsw_update_slave_open_state(priv, false)
 
@@ -1371,9 +1365,14 @@ static int __devinit cpsw_probe(struct platform_device *pdev)
 	priv->slaves[0].ndev = ndev;
 	priv->emac_port = 0;
 
-	priv->clk = clk_get(&pdev->dev, NULL);
-	if (IS_ERR(priv->clk))
-		dev_err(priv->dev, "failed to get device clock\n");
+	pm_runtime_enable(&pdev->dev);
+	pm_runtime_get_sync(&pdev->dev);
+	priv->clk = clk_get(&pdev->dev, "fck");
+	if (IS_ERR(priv->clk)) {
+		dev_err(&pdev->dev, "fck is not found\n");
+		ret = -ENODEV;
+		goto clean_slave_ret;
+	}
 
 	priv->coal_intvl = 0;
 	priv->bus_freq_mhz = clk_get_rate(priv->clk) / 1000000;
@@ -1572,6 +1571,9 @@ clean_cpsw_iores_ret:
 				resource_size(priv->cpsw_res));
 clean_clk_ret:
 	clk_put(priv->clk);
+clean_slave_ret:
+	pm_runtime_get_sync(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
 	kfree(priv->slaves);
 clean_ndev_ret:
 	free_netdev(ndev);
@@ -1600,6 +1602,8 @@ static int __devexit cpsw_remove(struct platform_device *pdev)
 				resource_size(priv->cpsw_res));
 	release_mem_region(priv->cpsw_ss_res->start,
 				resource_size(priv->cpsw_ss_res));
+	pm_runtime_put_sync(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
 	clk_put(priv->clk);
 	kfree(priv->slaves);
 	unregister_netdev(ndev);
@@ -1622,10 +1626,11 @@ static inline void cpsw_start_slaves_interface(struct net_device *ndev)
 	}
 }
 
-static inline void cpsw_stop_slaves_interface(struct net_device *ndev,
-					      struct cpsw_priv *priv)
+static inline void cpsw_stop_slaves_interface(struct net_device *ndev)
 {
 	u32 i = 0;
+	struct cpsw_priv *priv = netdev_priv(ndev);
+
 	for (i = 0; i < priv->data.slaves; i++) {
 		ndev = cpsw_get_slave_ndev(priv, i);
 		if (netif_running(ndev))
@@ -1638,7 +1643,7 @@ static inline void cpsw_stop_slaves_interface(struct net_device *ndev,
 #define cpsw_start_slaves_interface(ndev)		\
 	if (netif_running(ndev))			\
 		cpsw_ndo_open(ndev)
-#define cpsw_stop_slaves_interface(ndev, priv)		\
+#define cpsw_stop_slaves_interface(ndev)		\
 	if (netif_running(ndev))			\
 		cpsw_ndo_stop(ndev)
 
@@ -1648,14 +1653,9 @@ static int cpsw_suspend(struct device *dev)
 {
 	struct platform_device	*pdev = to_platform_device(dev);
 	struct net_device	*ndev = platform_get_drvdata(pdev);
-	struct cpsw_priv	*priv = netdev_priv(ndev);
 
-	cpsw_stop_slaves_interface(ndev, priv);
-
-	soft_reset("cpsw", &priv->regs->soft_reset);
-	soft_reset("sliver 0", &priv->slaves[0].sliver->soft_reset);
-	soft_reset("sliver 1", &priv->slaves[1].sliver->soft_reset);
-	soft_reset("cpsw_ss", &priv->ss_regs->soft_reset);
+	cpsw_stop_slaves_interface(ndev);
+	pm_runtime_put_sync(&pdev->dev);
 
 	return 0;
 }
@@ -1665,6 +1665,7 @@ static int cpsw_resume(struct device *dev)
 	struct platform_device	*pdev = to_platform_device(dev);
 	struct net_device	*ndev = platform_get_drvdata(pdev);
 
+	pm_runtime_get_sync(&pdev->dev);
 	cpsw_start_slaves_interface(ndev);
 
 	return 0;
