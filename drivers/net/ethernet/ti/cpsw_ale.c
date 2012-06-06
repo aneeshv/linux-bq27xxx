@@ -22,6 +22,7 @@
 #include <linux/sysfs.h>
 #include <linux/export.h>
 #include <linux/module.h>
+#include <linux/etherdevice.h>
 
 #include "cpsw_ale.h"
 
@@ -156,7 +157,7 @@ static int cpsw_ale_write(struct cpsw_ale *ale, int idx, u32 *ale_entry)
 	return idx;
 }
 
-static int cpsw_ale_match_addr(struct cpsw_ale *ale, u8* addr, u16 vid)
+int cpsw_ale_match_addr(struct cpsw_ale *ale, u8* addr, u16 vid)
 {
 	u32 ale_entry[ALE_ENTRY_WORDS];
 	int type, idx;
@@ -177,7 +178,7 @@ static int cpsw_ale_match_addr(struct cpsw_ale *ale, u8* addr, u16 vid)
 	return -ENOENT;
 }
 
-static int cpsw_ale_match_vlan(struct cpsw_ale *ale, u16 vid)
+int cpsw_ale_match_vlan(struct cpsw_ale *ale, u16 vid)
 {
 	u32 ale_entry[ALE_ENTRY_WORDS];
 	int type, idx;
@@ -242,6 +243,30 @@ static void cpsw_ale_flush_mcast(struct cpsw_ale *ale, u32 *ale_entry,
 		cpsw_ale_set_entry_type(ale_entry, ALE_TYPE_FREE);
 	else
 		cpsw_ale_set_port_mask(ale_entry, mask);
+}
+
+int cpsw_ale_flush_multicast(struct cpsw_ale *ale, int port_mask)
+{
+	u32 ale_entry[ALE_ENTRY_WORDS];
+	int ret, idx;
+
+	for (idx = 0; idx < ale->ale_entries; idx++) {
+		cpsw_ale_read(ale, idx, ale_entry);
+		ret = cpsw_ale_get_entry_type(ale_entry);
+		if (ret != ALE_TYPE_ADDR && ret != ALE_TYPE_VLAN_ADDR)
+			continue;
+
+		if (cpsw_ale_get_mcast(ale_entry)) {
+			u8 addr[6];
+
+			cpsw_ale_get_addr(ale_entry, addr);
+			if (!is_broadcast_ether_addr(addr))
+				cpsw_ale_flush_mcast(ale, ale_entry, port_mask);
+		}
+
+		cpsw_ale_write(ale, idx, ale_entry);
+	}
+	return 0;
 }
 
 static void cpsw_ale_flush_ucast(struct cpsw_ale *ale, u32 *ale_entry,
@@ -374,6 +399,25 @@ static int cpsw_ale_dump_entry(int idx, u32 *ale_entry, char *buf, int len)
 	return outlen;
 }
 
+int cpsw_ale_dump(struct cpsw_ale *ale, int index, char *buf, int len)
+{
+	int outlen = 0, idx;
+	u32 ale_entry[ALE_ENTRY_WORDS];
+
+	if (index) {
+		cpsw_ale_read(ale, index, ale_entry);
+		outlen += cpsw_ale_dump_entry(index, ale_entry,
+				buf + outlen, len - outlen);
+	} else {
+		for (idx = 0; idx < ale->ale_entries; idx++) {
+			cpsw_ale_read(ale, idx, ale_entry);
+			outlen += cpsw_ale_dump_entry(idx, ale_entry,
+					buf + outlen, len - outlen);
+		}
+	}
+	return outlen;
+}
+
 int cpsw_ale_add_ucast(struct cpsw_ale *ale, u8 *addr, int port, int flags)
 {
 	u32 ale_entry[ALE_ENTRY_WORDS] = {0, 0, 0};
@@ -398,6 +442,27 @@ int cpsw_ale_add_ucast(struct cpsw_ale *ale, u8 *addr, int port, int flags)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(cpsw_ale_add_ucast);
+
+int cpsw_ale_add_oui(struct cpsw_ale *ale, u8 *addr)
+{
+	u32 ale_entry[ALE_ENTRY_WORDS] = {0, 0, 0};
+	int idx;
+
+	cpsw_ale_set_entry_type(ale_entry, ALE_TYPE_ADDR);
+	cpsw_ale_set_addr(ale_entry, addr);
+	cpsw_ale_set_ucast_type(ale_entry, ALE_UCAST_OUI);
+
+	idx = cpsw_ale_match_addr(ale, addr, 0);
+	if (idx < 0)
+		idx = cpsw_ale_match_free(ale);
+	if (idx < 0)
+		idx = cpsw_ale_find_ageable(ale);
+	if (idx < 0)
+		return -ENOMEM;
+
+	cpsw_ale_write(ale, idx, ale_entry);
+	return 0;
+}
 
 int cpsw_ale_del_ucast(struct cpsw_ale *ale, u8 *addr, int port)
 {
@@ -619,7 +684,7 @@ struct ale_control_info {
 };
 
 #define CTRL_GLOBAL(name, bit)		{#name, ALE_CONTROL, 0, bit, 0, 1}
-#define CTRL_UNK(name, bit)		{#name, ALE_UNKNOWNVLAN, 0, bit, 1, 1}
+#define CTRL_UNK(name, shift)		{#name, ALE_UNKNOWNVLAN, 0, shift, 0, 6}
 #define CTRL_PORTCTL(name, start, bits)	{#name, ALE_PORTCTL, 4, start, 0, bits}
 
 static struct ale_control_info ale_controls[] = {
