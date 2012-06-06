@@ -27,6 +27,7 @@
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/pm_runtime.h>
+#include <linux/if_vlan.h>
 
 #include <linux/cpsw.h>
 #include <plat/dmtimer.h>
@@ -124,6 +125,11 @@ do {								\
 	priv->slaves[priv->emac_port].open_stat = state;
 
 #else	/* CONFIG_TI_CPSW_DUAL_EMAC */
+
+#if defined(CONFIG_VLAN_8021Q) || defined(CONFIG_VLAN_8021Q_MODULE)
+#define VLAN_SUPPORT
+#define CPSW_VLAN_AWARE_MODE
+#endif
 
 #define cpsw_get_slave_ndev(priv, __slave_no__)		NULL
 #define cpsw_get_slave_priv(priv, __slave_no__)		NULL
@@ -1125,6 +1131,78 @@ static int cpsw_set_coalesce(struct net_device *ndev,
 	return 0;
 }
 
+#ifdef VLAN_SUPPORT
+
+#ifdef CONFIG_TI_CPSW_DUAL_EMAC
+
+static inline void cpsw_add_vlan_ale_entry(struct cpsw_priv *priv,
+					   unsigned short vid)
+{
+	cpsw_ale_add_vlan(priv->ale, vid, 1 << priv->host_port |
+			1 << (priv->emac_port + 1), 0,
+			1 << priv->host_port | 1 << (priv->emac_port + 1), 0);
+	cpsw_ale_vlan_add_ucast(priv->ale, priv->mac_addr, priv->host_port,
+			0, vid);
+	cpsw_ale_vlan_add_mcast(priv->ale, priv->ndev->broadcast,
+			1 << priv->host_port | 1 << (priv->emac_port + 1),
+			vid, 0, 0);
+}
+
+#else
+
+static inline void cpsw_add_vlan_ale_entry(struct cpsw_priv *priv,
+				unsigned short vid)
+{
+	cpsw_ale_add_vlan(priv->ale, vid, ALE_ALL_PORTS << priv->host_port,
+			0, ALE_ALL_PORTS << priv->host_port,
+			(BIT(1) | BIT(2)) << priv->host_port);
+	cpsw_ale_vlan_add_ucast(priv->ale, priv->mac_addr,
+			priv->host_port, 0, vid);
+	cpsw_ale_vlan_add_mcast(priv->ale, priv->ndev->broadcast,
+			ALE_ALL_PORTS << priv->host_port, vid, 0, 0);
+}
+
+#endif
+
+static void cpsw_ndo_vlan_rx_add_vid(struct net_device *ndev,
+		unsigned short vid)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+
+	spin_lock(&priv->lock);
+
+	dev_dbg(priv->dev, "Adding vlanid %d to vlan filter\n", vid);
+	if (vid) {
+		cpsw_add_vlan_ale_entry(priv, vid);
+	} else {
+		cpsw_ale_add_vlan(priv->ale, vid,
+				ALE_ALL_PORTS << priv->host_port,
+				ALE_ALL_PORTS << priv->host_port,
+				ALE_ALL_PORTS << priv->host_port,
+				(BIT(1) | BIT(2)) << priv->host_port);
+	}
+
+	spin_unlock(&priv->lock);
+}
+
+static void cpsw_ndo_vlan_rx_kill_vid(struct net_device *ndev,
+		unsigned short vid)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+
+	spin_lock(&priv->lock);
+
+	dev_dbg(priv->dev, "removing vlanid %d from vlan filter\n", vid);
+	cpsw_ale_del_vlan(priv->ale, vid, ALE_ALL_PORTS << priv->host_port);
+	cpsw_ale_vlan_del_ucast(priv->ale, priv->mac_addr,
+				priv->host_port, vid);
+	cpsw_ale_vlan_del_mcast(priv->ale, priv->ndev->broadcast, 0, vid);
+
+	spin_unlock(&priv->lock);
+}
+
+#endif /* VLAN_SUPPORT */
+
 static const struct net_device_ops cpsw_netdev_ops = {
 	.ndo_open		= cpsw_ndo_open,
 	.ndo_stop		= cpsw_ndo_stop,
@@ -1136,6 +1214,10 @@ static const struct net_device_ops cpsw_netdev_ops = {
 	.ndo_get_stats		= cpsw_ndo_get_stats,
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	.ndo_poll_controller	= cpsw_ndo_poll_controller,
+#endif
+#ifdef VLAN_SUPPORT
+	.ndo_vlan_rx_add_vid	= cpsw_ndo_vlan_rx_add_vid,
+	.ndo_vlan_rx_kill_vid	= cpsw_ndo_vlan_rx_kill_vid,
 #endif
 };
 
@@ -1283,6 +1365,10 @@ static int cpsw_init_slave_emac(struct platform_device *pdev,
 		priv_sl2->irqs_table[i] = priv->irqs_table[i];
 		priv_sl2->num_irqs = priv->num_irqs;
 	}
+
+#ifdef VLAN_SUPPORT
+	ndev->features |= NETIF_F_HW_VLAN_FILTER;
+#endif
 
 	ndev->flags |= IFF_ALLMULTI;	/* see cpsw_ndo_change_rx_flags() */
 
@@ -1522,6 +1608,10 @@ static int __devinit cpsw_probe(struct platform_device *pdev)
 		priv->irqs_table[k] = i;
 		priv->num_irqs = ++k;
 	}
+
+#ifdef VLAN_SUPPORT
+	ndev->features |= NETIF_F_HW_VLAN_FILTER;
+#endif
 
 	ndev->flags |= IFF_ALLMULTI;	/* see cpsw_ndo_change_rx_flags() */
 
