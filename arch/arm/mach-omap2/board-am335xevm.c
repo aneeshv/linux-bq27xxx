@@ -1980,9 +1980,9 @@ static int wl12xx_set_power(struct device *dev, int slot, int on, int vdd)
 	if (on) {
 		gpio_direction_output(am335xevm_wlan_data.wlan_enable_gpio, 1);
 		mdelay(70);
-	}
-	else
+	} else {
 		gpio_direction_output(am335xevm_wlan_data.wlan_enable_gpio, 0);
+	}
 
 	return 0;
 }
