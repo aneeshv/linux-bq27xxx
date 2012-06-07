@@ -1623,6 +1623,20 @@ static struct regulator_consumer_supply tps65217_ldo4_consumers[] = {
 	},
 };
 
+/*
+ * FIXME: Some BeagleBones reuire a ramp_delay to settle down the set
+ * voltage from 0.95v to 1.25v. By default a minimum of 70msec is set
+ * based on experimentation. This will be removed/modified to exact
+ * value, once the root cause is known.
+ *
+ * The reason for extended ramp time requirement on BeagleBone is not
+ * known and the delay varies from board - board, if the board hangs
+ * with this 70msec delay then try to increase the value.
+ */
+static struct tps65217_rdelay dcdc2_ramp_delay = {
+	.ramp_delay = 70000,
+};
+
 static struct regulator_init_data tps65217_regulator_data[] = {
 	/* dcdc1 */
 	{
@@ -1648,6 +1662,7 @@ static struct regulator_init_data tps65217_regulator_data[] = {
 		},
 		.num_consumer_supplies = ARRAY_SIZE(tps65217_dcdc2_consumers),
 		.consumer_supplies = tps65217_dcdc2_consumers,
+		.driver_data = &dcdc2_ramp_delay,
 	},
 
 	/* dcdc3 */
