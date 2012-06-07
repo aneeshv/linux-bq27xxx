@@ -1768,22 +1768,6 @@ static int _regulator_do_set_voltage(struct regulator_dev *rdev,
 			}
 		}
 
-		/*
-		 * If we can't obtain the old selector there is not enough
-		 * info to call set_voltage_time_sel().
-		 */
-		if (rdev->desc->ops->set_voltage_time_sel &&
-		    rdev->desc->ops->get_voltage_sel) {
-			unsigned int old_selector = 0;
-
-			ret = rdev->desc->ops->get_voltage_sel(rdev);
-			if (ret < 0)
-				return ret;
-			old_selector = ret;
-			delay = rdev->desc->ops->set_voltage_time_sel(rdev,
-						old_selector, selector);
-		}
-
 		if (best_val != INT_MAX) {
 			ret = rdev->desc->ops->set_voltage_sel(rdev, selector);
 			selector = best_val;
@@ -1794,17 +1778,39 @@ static int _regulator_do_set_voltage(struct regulator_dev *rdev,
 		ret = -EINVAL;
 	}
 
-	/* Insert any necessary delays */
-	if (delay >= 1000) {
-		mdelay(delay / 1000);
-		udelay(delay % 1000);
-	} else if (delay) {
-		udelay(delay);
-	}
+	if (ret == 0) {
+		/*
+		 * If we can't obtain the old selector there is not enough
+		 * info to call set_voltage_time_sel().
+		 */
+		if (rdev->desc->ops->set_voltage_time_sel &&
+		    rdev->desc->ops->get_voltage_sel) {
+			int old_selector;
 
-	if (ret == 0)
+			old_selector = rdev->desc->ops->get_voltage_sel(rdev);
+			if (old_selector < 0)
+				return old_selector;
+
+			delay = rdev->desc->ops->set_voltage_time_sel(rdev,
+						old_selector, selector);
+			if (delay < 0) {
+				delay = 0;
+				rdev_warn(rdev, "set_voltage_time_sel() failed"
+							": %d\n", ret);
+			}
+		}
+
+		/* Insert any necessary delays */
+		if (delay >= 1000) {
+			mdelay(delay / 1000);
+			udelay(delay % 1000);
+		} else if (delay) {
+			udelay(delay);
+		}
+
 		_notifier_call_chain(rdev, REGULATOR_EVENT_VOLTAGE_CHANGE,
-				     NULL);
+					NULL);
+	}
 
 	trace_regulator_set_voltage_complete(rdev_get_name(rdev), selector);
 
