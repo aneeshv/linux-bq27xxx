@@ -51,6 +51,7 @@ struct cpsw_platform_data {
 
 	bool	no_bd_ram; /* no embedded BD ram*/
 	u8	version;
+	u32	default_vlan; /* Default VLAN for Untagged packet handling*/
 };
 
 #endif /* __CPSW_H__ */

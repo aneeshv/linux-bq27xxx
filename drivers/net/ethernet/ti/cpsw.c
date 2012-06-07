@@ -789,6 +789,21 @@ static void cpsw_slave_open(struct cpsw_slave *slave, struct cpsw_priv *priv)
 	}
 }
 
+#if defined(VLAN_SUPPORT) && !defined(CONFIG_TI_CPSW_DUAL_EMAC)
+static inline void cpsw_add_default_vlan(struct cpsw_priv *priv)
+{
+	writel(priv->data.default_vlan, &priv->host_port_regs->port_vlan);
+	writel(priv->data.default_vlan, &priv->slaves[0].regs->port_vlan);
+	writel(priv->data.default_vlan, &priv->slaves[1].regs->port_vlan);
+	cpsw_ale_add_vlan(priv->ale, priv->data.default_vlan,
+			ALE_ALL_PORTS << priv->host_port,
+			ALE_ALL_PORTS << priv->host_port,
+			ALE_ALL_PORTS << priv->host_port, 0);
+}
+#else
+#define cpsw_add_default_vlan(priv)
+#endif
+
 static void cpsw_init_host_port(struct cpsw_priv *priv)
 {
 	u32 control_reg;
@@ -837,6 +852,9 @@ static int cpsw_ndo_open(struct net_device *ndev)
 	if (!cpsw_common_res_usage_state(priv))
 		cpsw_init_host_port(priv);
 	for_each_slave(priv, cpsw_slave_open, priv);
+
+	/* Add default VLAN */
+	cpsw_add_default_vlan(priv);
 
 	if (!cpsw_common_res_usage_state(priv)) {
 		ret = device_create_file(&ndev->dev, &dev_attr_hw_stats);
