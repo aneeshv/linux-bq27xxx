@@ -1159,6 +1159,7 @@ static struct pinmux_config ecap2_pin_mux[] = {
 
 #define AM335XEVM_WLAN_PMENA_GPIO	GPIO_TO_PIN(1, 30)
 #define AM335XEVM_WLAN_IRQ_GPIO		GPIO_TO_PIN(3, 17)
+#define AM335XEVM_SK_WLAN_IRQ_GPIO      GPIO_TO_PIN(1, 29)
 
 struct wl12xx_platform_data am335xevm_wlan_data = {
 	.irq = OMAP_GPIO_IRQ(AM335XEVM_WLAN_IRQ_GPIO),
@@ -1197,6 +1198,13 @@ static struct pinmux_config wl12xx_pin_mux[] = {
 	{"mcasp0_ahclkx.gpio3_21", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT_PULLUP},
 	{NULL, 0},
  };
+
+static struct pinmux_config wl12xx_pin_mux_sk[] = {
+	{"gpmc_wpn.gpio0_31", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
+	{"gpmc_csn0.gpio1_29", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"mcasp0_ahclkx.gpio3_21", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
+	{NULL, 0},
+};
 
 static bool backlight_enable;
 
@@ -1951,6 +1959,13 @@ static void mmc1_init(int evm_id, int profile)
 static void mmc1_wl12xx_init(int evm_id, int profile)
 {
 	setup_pin_mux(mmc1_common_pin_mux);
+	am335x_mmc[1].mmc = 2;
+	am335x_mmc[1].name = "wl1271";
+	am335x_mmc[1].caps = MMC_CAP_4_BIT_DATA | MMC_CAP_POWER_OFF_CARD;
+	am335x_mmc[1].nonremovable = true;
+	am335x_mmc[1].gpio_cd = -EINVAL;
+	am335x_mmc[1].gpio_wp = -EINVAL;
+	am335x_mmc[1].ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */
 }
 
 static void mmc2_wl12xx_init(int evm_id, int profile)
@@ -2093,6 +2108,15 @@ static void wl12xx_init(int evm_id, int profile)
 	struct omap_mmc_platform_data *pdata;
 	int ret;
 
+	if (evm_id == EVM_SK) {
+		am335xevm_wlan_data.wlan_enable_gpio = GPIO_TO_PIN(0, 31);
+		am335xevm_wlan_data.bt_enable_gpio = GPIO_TO_PIN(3, 21);
+		am335xevm_wlan_data.irq =
+				OMAP_GPIO_IRQ(AM335XEVM_SK_WLAN_IRQ_GPIO);
+		setup_pin_mux(wl12xx_pin_mux_sk);
+	} else {
+		setup_pin_mux(wl12xx_pin_mux);
+	}
 	wl12xx_bluetooth_enable();
 
 	if (wl12xx_set_platform_data(&am335xevm_wlan_data))
@@ -2117,7 +2141,6 @@ static void wl12xx_init(int evm_id, int profile)
 		goto out;
 	}
 
-	setup_pin_mux(wl12xx_pin_mux);
 
 	pdata->slots[0].set_power = wl12xx_set_power;
 out:
@@ -2439,6 +2462,8 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{gpio_led_init,  DEV_ON_BASEBOARD, PROFILE_ALL},
 	{lis331dlh_init, DEV_ON_BASEBOARD, PROFILE_ALL},
 	{mcasp1_init,   DEV_ON_BASEBOARD, PROFILE_ALL},
+	{uart1_wl12xx_init, DEV_ON_BASEBOARD, PROFILE_ALL},
+	{wl12xx_init,       DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
