@@ -389,6 +389,21 @@ static int tps65217_pmic_ldo_list_voltage(struct regulator_dev *dev,
 	return tps->info[ldo]->vsel_to_uv(selector);
 }
 
+static int tps65217_pmic_dcdc_set_voltage_time_sel(struct regulator_dev *dev,
+			unsigned int old_sel, unsigned int new_sel)
+{
+	struct tps65217 *tps = rdev_get_drvdata(dev);
+	unsigned int dcdc = rdev_get_id(dev);
+	int ret;
+
+	/* If the regulator isn't on, it won't take time here */
+	ret = tps65217_pmic_dcdc_is_enabled(dev);
+	if (!ret || ret < 0)
+		return ret;
+
+	return tps->info[dcdc]->delay;
+}
+
 /* Operations permitted on DCDCx */
 static struct regulator_ops tps65217_pmic_dcdc_ops = {
 	.is_enabled		= tps65217_pmic_dcdc_is_enabled,
@@ -397,6 +412,7 @@ static struct regulator_ops tps65217_pmic_dcdc_ops = {
 	.get_voltage_sel	= tps65217_pmic_dcdc_get_voltage_sel,
 	.set_voltage		= tps65217_pmic_dcdc_set_voltage,
 	.list_voltage		= tps65217_pmic_dcdc_list_voltage,
+	.set_voltage_time_sel	= tps65217_pmic_dcdc_set_voltage_time_sel,
 };
 
 /* Operations permitted on LDO1 */
@@ -441,10 +457,15 @@ static int __devinit tps65217_regulator_probe(struct platform_device *pdev)
 	struct regulator_dev *rdev;
 	struct tps65217 *tps;
 	struct tps_info *info = &tps65217_pmic_regs[pdev->id];
+	const struct regulator_init_data *init_data = pdev->dev.platform_data;
+	struct tps65217_rdelay *pd = init_data->driver_data;
 
 	/* Already set by core driver */
 	tps = dev_to_tps65217(pdev->dev.parent);
 	tps->info[pdev->id] = info;
+
+	if (pd)
+		tps->info[pdev->id]->delay = pd->ramp_delay;
 
 	rdev = regulator_register(&regulators[pdev->id], &pdev->dev,
 				  pdev->dev.platform_data, tps);
