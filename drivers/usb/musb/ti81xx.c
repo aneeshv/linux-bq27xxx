@@ -1505,7 +1505,7 @@ static void ti81xx_save_context(struct ti81xx_glue *glue)
 			musb->en_otgw_timer = 1;
 		}
 
-		if (timer_pending(&musb->otg_workaround) &&
+		if (timer_pending(&musb->otg_timer) &&
 					is_otg_enabled(musb)) {
 			del_timer_sync(&musb->otg_timer);
 			musb->en_otg_timer = 1;
