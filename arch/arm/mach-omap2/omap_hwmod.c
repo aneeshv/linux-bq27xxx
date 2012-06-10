@@ -1631,6 +1631,13 @@ static int _idle(struct omap_hwmod *oh)
 		return -EINVAL;
 	}
 
+	/*
+	 * FIXME: Due to AM33XX CPSW IP integration bug, it is required
+	 * to assert ocp reset signal to the module before disabling it.
+	 */
+	if (oh->flags & HWMOD_SWSUP_RESET_BEFORE_IDLE)
+		_reset(oh);
+
 	if (oh->class->sysc)
 		_idle_sysc(oh);
 	_del_initiator_dep(oh, mpu_oh);
