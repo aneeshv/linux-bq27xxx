@@ -129,6 +129,7 @@ int omap4_prminst_assert_hardreset(u8 shift, u8 part, s16 inst,
  * wait
  * @rstctrl_reg: RM_RSTCTRL register address for this module
  * @shift: register bit shift corresponding to the reset line to deassert
+ * @st_shift: register bit shift corresponding to the reset line to deassert
  *
  * Some IPs like dsp, ipu or iva contain processors that require an HW
  * reset line to be asserted / deasserted in order to fully enable the
@@ -139,12 +140,14 @@ int omap4_prminst_assert_hardreset(u8 shift, u8 part, s16 inst,
  * -EINVAL upon an argument error, -EEXIST if the submodule was already out
  * of reset, or -EBUSY if the submodule did not exit reset promptly.
  */
-int omap4_prminst_deassert_hardreset(u8 shift, u8 part, s16 inst,
-				     u16 rstctrl_offs)
+int omap4_prminst_deassert_hardreset(u8 shift, u8 st_shift, u8 part,
+				s16 inst, u16 rstctrl_offs, u16 rstst_offs)
 {
 	int c;
-	u32 mask = 1 << shift;
-	u16 rstst_offs = rstctrl_offs + OMAP4_RST_CTRL_ST_OFFSET;
+
+	rstst_offs = rstst_offs ? rstst_offs :
+			(rstctrl_offs + OMAP4_RST_CTRL_ST_OFFSET);
+	st_shift = st_shift ? st_shift : shift;
 
 	/* Check the current status to avoid de-asserting the line twice */
 	if (omap4_prminst_is_hardreset_asserted(shift, part, inst,
@@ -152,13 +155,13 @@ int omap4_prminst_deassert_hardreset(u8 shift, u8 part, s16 inst,
 		return -EEXIST;
 
 	/* Clear the reset status by writing 1 to the status bit */
-	omap4_prminst_rmw_inst_reg_bits(0xffffffff, mask, part, inst,
+	omap4_prminst_rmw_inst_reg_bits(0xffffffff, (1 << st_shift), part, inst,
 					rstst_offs);
 	/* de-assert the reset control line */
-	omap4_prminst_rmw_inst_reg_bits(mask, 0, part, inst, rstctrl_offs);
+	omap4_prminst_rmw_inst_reg_bits((1 << shift), 0, part, inst, rstctrl_offs);
 	/* wait the status to be set */
-	omap_test_timeout(omap4_prminst_is_hardreset_asserted(shift, part, inst,
-							      rstst_offs),
+	omap_test_timeout(omap4_prminst_is_hardreset_asserted(st_shift,
+					part, inst, rstst_offs),
 			  MAX_MODULE_HARDRESET_WAIT, c);
 
 	return (c == MAX_MODULE_HARDRESET_WAIT) ? -EBUSY : 0;
