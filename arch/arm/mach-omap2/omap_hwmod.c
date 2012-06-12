@@ -1548,16 +1548,6 @@ static int _enable(struct omap_hwmod *oh)
 		return -EINVAL;
 	}
 
-
-	/*
-	 * If an IP contains only one HW reset line, then de-assert it in order
-	 * to allow the module state transition. Otherwise the PRCM will return
-	 * Intransition status, and the init will failed.
-	 */
-	if ((oh->_state == _HWMOD_STATE_INITIALIZED ||
-	     oh->_state == _HWMOD_STATE_DISABLED) && oh->rst_lines_cnt == 1)
-		_deassert_hardreset(oh, oh->rst_lines[0].name);
-
 	/* Mux pins for device runtime if populated */
 	if (oh->mux && (!oh->mux->enabled ||
 			((oh->_state == _HWMOD_STATE_IDLE) &&
@@ -1583,6 +1573,18 @@ static int _enable(struct omap_hwmod *oh)
 
 	_enable_clocks(oh);
 	_enable_module(oh);
+
+	/*
+	 * If an IP contains only one HW reset line, then de-assert it in order
+	 * to allow the module state transition. Otherwise the PRCM will return
+	 * Intransition status, and the init will failed.
+	 *
+	 * TODO: Based on observation, on module enable sate, we can safely
+	 *	assert the reset signal here (irrespective of idlemode state).
+	 */
+	if ((oh->_state == _HWMOD_STATE_INITIALIZED ||
+	     oh->_state == _HWMOD_STATE_DISABLED) && oh->rst_lines_cnt == 1)
+		_deassert_hardreset(oh, oh->rst_lines[0].name);
 
 	r = _wait_target_ready(oh);
 	if (!r) {
