@@ -500,7 +500,7 @@ static int __init am33xx_pm_init(void)
 /* Read SDRAM_CONFIG register to determine Memory Type */
 	base = am33xx_get_ram_base();
 	reg = readl(base + EMIF4_0_SDRAM_CONFIG);
-	reg &= SDRAM_TYPE ;
+	reg = (reg & SDRAM_TYPE_MASK) >> SDRAM_TYPE_SHIFT;
 	suspend_cfg_param_list[MEMORY_TYPE] = reg;
 
 /*
