@@ -361,7 +361,8 @@ static inline void cpsw_add_dual_emac_mode_default_ale_entries(
 	cpsw_ale_add_ucast(priv->ale, priv->mac_addr,
 		priv->host_port, 0);
 	cpsw_ale_add_vlan(priv->ale, 0,
-		ALE_ALL_PORTS << priv->host_port, 1, 1, 0);
+		ALE_ALL_PORTS << priv->host_port,
+		ALE_ALL_PORTS << priv->host_port, priv->host_port, 0);
 }
 
 static int cpsw_common_res_usage_state(struct cpsw_priv *priv)
