@@ -1164,7 +1164,7 @@ static struct pinmux_config ecap2_pin_mux[] = {
 
 #define AM335XEVM_WLAN_PMENA_GPIO	GPIO_TO_PIN(1, 30)
 #define AM335XEVM_WLAN_IRQ_GPIO		GPIO_TO_PIN(3, 17)
-#define AM335XEVM_SK_WLAN_IRQ_GPIO      GPIO_TO_PIN(1, 29)
+#define AM335XEVM_SK_WLAN_IRQ_GPIO      GPIO_TO_PIN(0, 31)
 
 struct wl12xx_platform_data am335xevm_wlan_data = {
 	.irq = OMAP_GPIO_IRQ(AM335XEVM_WLAN_IRQ_GPIO),
@@ -1205,8 +1205,8 @@ static struct pinmux_config wl12xx_pin_mux[] = {
  };
 
 static struct pinmux_config wl12xx_pin_mux_sk[] = {
-	{"gpmc_wpn.gpio0_31", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
-	{"gpmc_csn0.gpio1_29", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_wpn.gpio0_31", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_csn0.gpio1_29", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT_PULLUP},
 	{"mcasp0_ahclkx.gpio3_21", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
 	{NULL, 0},
 };
@@ -1979,6 +1979,7 @@ static void mmc1_wl12xx_init(int evm_id, int profile)
 	am335x_mmc[1].name = "wl1271";
 	am335x_mmc[1].caps = MMC_CAP_4_BIT_DATA | MMC_CAP_POWER_OFF_CARD;
 	am335x_mmc[1].nonremovable = true;
+	am335x_mmc[1].pm_caps = MMC_PM_KEEP_POWER;
 	am335x_mmc[1].gpio_cd = -EINVAL;
 	am335x_mmc[1].gpio_wp = -EINVAL;
 	am335x_mmc[1].ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */
@@ -2125,10 +2126,12 @@ static void wl12xx_init(int evm_id, int profile)
 	int ret;
 
 	if (evm_id == EVM_SK) {
-		am335xevm_wlan_data.wlan_enable_gpio = GPIO_TO_PIN(0, 31);
+		am335xevm_wlan_data.wlan_enable_gpio = GPIO_TO_PIN(1, 29);
 		am335xevm_wlan_data.bt_enable_gpio = GPIO_TO_PIN(3, 21);
 		am335xevm_wlan_data.irq =
 				OMAP_GPIO_IRQ(AM335XEVM_SK_WLAN_IRQ_GPIO);
+		am335xevm_wlan_data.platform_quirks =
+				WL12XX_PLATFORM_QUIRK_EDGE_IRQ;
 		setup_pin_mux(wl12xx_pin_mux_sk);
 	} else {
 		setup_pin_mux(wl12xx_pin_mux);
