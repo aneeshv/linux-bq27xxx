@@ -459,8 +459,9 @@ emif_self_refresh_dis:
 	ldr	r0, emif_addr_virt
 	add	r0, r0, #EMIF4_0_SDRAM_MGMT_CTRL
 	ldr	r1, [r0]
-	bic	r1, r1, #(0x7 << 7)
+	bic	r1, r1, #(0x7 << 8)
 	str	r1, [r0]
+	str	r1, [r0, #4]
 
 	mov	r0, #7
 	ldmfd	sp!, {r4 - r11, pc}	@ restore regs and return
