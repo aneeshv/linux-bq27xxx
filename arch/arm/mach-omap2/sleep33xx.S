@@ -341,7 +341,7 @@ wait_emif_enable3:
 	/* Take out IO of mDDR mode */
 	ldr	r0, virt_ddr_io_ctrl
 	ldr	r1, [r0]
-	bic	r1, r1, #28
+	bic	r1, r1, #(1 << 28)
 	str	r1, [r0]
 
 	/* Enable VTP */
@@ -493,7 +493,7 @@ ENTRY(am33xx_resume_from_deep_sleep)
 	/* Take out IO of mDDR mode */
 	ldr	r0, phys_ddr_io_ctrl
 	ldr	r1, [r0]
-	bic	r1, r1, #28
+	bic	r1, r1, #(1 << 28)
 	str	r1, [r0]
 
 config_vtp3:
