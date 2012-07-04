@@ -2040,6 +2040,7 @@ static int musb_gadget_stop(struct usb_gadget *g,
 	if (!is_otg_enabled(musb))
 		musb_stop(musb);
 
+	musb->gadget_driver = NULL;
 	pm_runtime_put(musb->controller);
 
 	return 0;
