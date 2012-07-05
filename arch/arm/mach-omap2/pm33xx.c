@@ -26,6 +26,7 @@
 #include <linux/completion.h>
 #include <linux/pm_runtime.h>
 
+#include <mach/board-am335xevm.h>
 #include <plat/prcm.h>
 #include <plat/mailbox.h>
 #include <plat/sram.h>
@@ -491,6 +492,7 @@ static int __init am33xx_pm_init(void)
 	int ret;
 	void __iomem *base;
 	u32 reg;
+	u32 evm_id;
 
 	if (!cpu_is_am33xx())
 		return -ENODEV;
@@ -511,6 +513,14 @@ static int __init am33xx_pm_init(void)
 		suspend_cfg_param_list[SUSP_VTP_CTRL_VAL] = SUSP_VTP_CTRL_DDR2;
 	else
 		suspend_cfg_param_list[SUSP_VTP_CTRL_VAL] = SUSP_VTP_CTRL_DDR3;
+
+
+	/* Get Board Id */
+	evm_id = am335x_evm_get_id();
+	if (evm_id != -EINVAL)
+		suspend_cfg_param_list[EVM_ID] = evm_id;
+	else
+		suspend_cfg_param_list[EVM_ID] = 0xff;
 
 #ifdef CONFIG_SUSPEND
 	(void) clkdm_for_each(clkdms_setup, NULL);

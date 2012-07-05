@@ -39,9 +39,11 @@
 #define PROFILE_7		(0x1 << 7)
 #define PROFILE_ALL		0xFF
 
+#ifndef __ASSEMBLER__
 void am335x_evm_set_id(unsigned int evmid);
 int am335x_evm_get_id(void);
 void am33xx_cpsw_macidfillup(char *eeprommacid0, char *eeprommacid1);
 void am33xx_d_can_init(unsigned int instance);
 
+#endif
 #endif

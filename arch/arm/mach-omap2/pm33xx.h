@@ -29,6 +29,7 @@ extern void __iomem *am33xx_get_ram_base(void);
 enum suspend_cfg_params {
 	MEMORY_TYPE = 0,
 	SUSP_VTP_CTRL_VAL,
+	EVM_ID,
 	SUSPEND_CFG_PARAMS_END /* Must be the last entry */
 };
 

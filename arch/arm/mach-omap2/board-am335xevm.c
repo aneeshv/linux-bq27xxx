@@ -891,6 +891,11 @@ static struct pinmux_config gpio_led_mux[] = {
 	{NULL, 0},
 };
 
+static struct pinmux_config gpio_ddr_vtt_enb_pin_mux[] = {
+	{"ecap0_in_pwm0_out.gpio0_7", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
+	{NULL, 0},
+};
+
 /*
 * @pin_mux - single module pin-mux structure which defines pin-mux
 *			details for all its pins.
@@ -1457,6 +1462,17 @@ static void uart3_init(int evm_id, int profile)
 static void uart2_init(int evm_id, int profile)
 {
 	setup_pin_mux(uart2_pin_mux);
+	return;
+}
+
+/*
+ * gpio0_7 was driven HIGH in u-boot before DDR configuration
+ *
+ * setup gpio0_7 for EVM-SK 1.2
+ */
+static void gpio_ddr_vtt_enb_init(int evm_id, int profile)
+{
+	setup_pin_mux(gpio_ddr_vtt_enb_pin_mux);
 	return;
 }
 
@@ -2464,6 +2480,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{mcasp1_init,   DEV_ON_BASEBOARD, PROFILE_ALL},
 	{uart1_wl12xx_init, DEV_ON_BASEBOARD, PROFILE_ALL},
 	{wl12xx_init,       DEV_ON_BASEBOARD, PROFILE_ALL},
+	{gpio_ddr_vtt_enb_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
 
@@ -2976,6 +2993,15 @@ void __iomem * __init am33xx_get_mem_ctlr(void)
 void __iomem *am33xx_get_ram_base(void)
 {
 	return am33xx_emif_base;
+}
+
+void __iomem *am33xx_gpio0_base;
+
+void __iomem *am33xx_get_gpio0_base(void)
+{
+	am33xx_gpio0_base = ioremap(AM33XX_GPIO0_BASE, SZ_4K);
+
+	return am33xx_gpio0_base;
 }
 
 static struct resource am33xx_cpuidle_resources[] = {

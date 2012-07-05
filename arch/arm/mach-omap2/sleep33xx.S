@@ -18,11 +18,11 @@
 #include <asm/memory.h>
 #include <asm/assembler.h>
 #include <mach/io.h>
-#include <plat/emif.h>
-#include "cm33xx.h"
+#include <mach/board-am335xevm.h>
 
 #include <plat/emif.h>
 #include <plat/sram.h>
+#include <plat/gpio.h>
 
 #include "cm33xx.h"
 #include "pm33xx.h"
@@ -39,12 +39,13 @@
  * types to be passed in r0 _strictly_ in following order:
  * 1) memory_type [r0]
  * 2) susp_vtp_ctrl_val [r1]
+ * 3) evm_id [r2]
  *
  * The code loads these values taking r0 value as reference to the array in
  * registers starting from r0, i,e memory_type goes to r0 and susp_vtp_ctrl_val
- * goes to r1. These are then saved into memory locations before proceeding
- * with the sleep sequence and hence registers r0,r1 can still be used in the
- * rest of the sleep code.
+ * goes to r1 and so on. These are then saved into memory locations before
+ * proceeding with the sleep sequence and hence registers r0,r1 can still be
+ * used in the rest of the sleep code.
  *
  * mem_type is used to decide different suspend-resume sequences for DDR2
  * and DDR3.
@@ -121,6 +122,11 @@ wait_sc_\num:
 
 	str	r0, emif_addr_virt
 
+	ldr	r0, gpio0_addr_func
+	blx	r0
+
+	str	r0, gpio0_addr_virt
+
 	/* This ensures isb */
 	ldr	r0, dcache_flush
 	blx	r0
@@ -129,11 +135,12 @@ wait_sc_\num:
 	mov	r0, #0
 	mcr	p15, 0, r0, c7, c5, 0	@ I+BTB cache invalidate
 
-	ldm	r8, {r0-r1}		@ gather values passed
+	ldm	r8, {r0-r2}		@ gather values passed
 
 	/* Save the values passed */
 	str	r0, mem_type
 	str	r1, susp_vtp_ctrl_val
+	str	r2, evm_id
 
 	ldr	r0, emif_addr_virt
 
@@ -179,6 +186,18 @@ wait_sc_\num:
 
 	ddr_self_refresh	1
 
+	/* Disable VTT_Regulator on EVM-SK*/
+	ldr	r6, evm_id
+	cmp	r6, #EVM_SK
+	bne	no_gpio_toggle
+
+	/* Drive GPIO0_7 LOW */
+	ldr	r0, gpio0_addr_virt
+	ldr	r1, [r0, #OMAP4_GPIO_CLEARDATAOUT]
+	mov	r2, #(1 << 7)
+	str	r2, [r0, #OMAP4_GPIO_CLEARDATAOUT]
+
+no_gpio_toggle:
 	/* Weak pull down for macro DATA0 */
 	ldr	r1, virt_ddr_data0_ioctrl
 	ldr	r2, susp_io_pull_data
@@ -394,6 +413,18 @@ poll_vtp_ready_abt3:
 
 	wait_sdram_config	1
 
+	/* Enable VTT_Regulator on EVM-SK */
+	ldr	r6, evm_id
+	cmp	r6, #EVM_SK
+	bne	no_gpio_toggle2
+
+	/* Drive GPIO0_7 HIGH */
+	ldr	r0, gpio0_addr_virt
+	ldr	r1, [r0, #OMAP4_GPIO_SETDATAOUT]
+	mov	r2, #(1 << 7)
+	str	r2, [r0, #OMAP4_GPIO_SETDATAOUT]
+
+no_gpio_toggle2:
 	b	emif_self_refresh_dis
 
 	/* DDR2 resume path */
@@ -545,6 +576,18 @@ poll_vtp_ready3:
 
 	wait_sdram_config	2
 
+	/* Enable VTT_Regulator	on EVM-SK */
+	ldr	r6, evm_id
+	cmp	r6, #EVM_SK
+	bne	no_gpio_toggle3
+
+	/* Drive GPIO0_7 HIGH */
+	ldr	r0, gpio0_phys_addr
+	ldr	r1, [r0, #OMAP4_GPIO_SETDATAOUT]
+	mov	r2, #(1 << 7)
+	str	r2, [r0, #OMAP4_GPIO_SETDATAOUT]
+
+no_gpio_toggle3:
 	b	config_emif_timings
 
 	/* DDR2 resume path */
@@ -666,6 +709,11 @@ emif_addr_func:
 	.word	am33xx_get_ram_base
 emif_phys_addr:
 	.word	AM33XX_EMIF0_BASE
+
+gpio0_addr_func:
+	.word	am33xx_get_gpio0_base
+gpio0_phys_addr:
+	.word	AM33XX_GPIO0_BASE
 
 ddr_start:
 	.word	PAGE_OFFSET
@@ -791,7 +839,11 @@ susp_vtp_ctrl_val:
 	.word	0xDEADBEEF
 mem_type:
 	.word	0xDEADBEEF
+evm_id:
+	.word	0xDEADBEEF
 emif_addr_virt:
+	.word	0xDEADBEEF
+gpio0_addr_virt:
 	.word	0xDEADBEEF
 emif_rd_lat_val:
 	.word	0xDEADBEEF
