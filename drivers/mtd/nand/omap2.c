@@ -1234,11 +1234,8 @@ static int __devinit omap_nand_probe(struct platform_device *pdev)
 
 		offset = JFFS2_CLEAN_MARKER_OFFSET;
 
-		if (info->mtd.oobsize == 64)
-			omap_oobinfo.eccbytes = info->nand.ecc.bytes *
-						2048/info->nand.ecc.size;
-		else
-			omap_oobinfo.eccbytes = info->nand.ecc.bytes;
+		omap_oobinfo.eccbytes = info->nand.ecc.bytes *
+			info->mtd.writesize / info->nand.ecc.size;
 
 		if (pdata->ecc_opt == OMAP_ECC_HAMMING_CODE_HW_ROMCODE) {
 			omap_oobinfo.oobfree->offset =
@@ -1247,8 +1244,10 @@ static int __devinit omap_nand_probe(struct platform_device *pdev)
 				(offset + omap_oobinfo.eccbytes);
 		} else if (pdata->ecc_opt == OMAP_ECC_BCH8_CODE_HW) {
 			offset = BCH_ECC_POS; /* Synchronize with U-boot */
-			omap_oobinfo.oobfree->offset =
-				BCH_JFFS2_CLEAN_MARKER_OFFSET;
+
+			omap_oobinfo.oobfree->offset = offset +
+				omap_oobinfo.eccbytes;
+
 			omap_oobinfo.oobfree->length = info->mtd.oobsize -
 						offset - omap_oobinfo.eccbytes;
 		} else {
