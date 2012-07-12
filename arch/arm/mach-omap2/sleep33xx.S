@@ -494,6 +494,21 @@ emif_self_refresh_dis:
 	str	r1, [r0]
 	str	r1, [r0, #4]
 
+/*
+ * A write to SDRAM CONFIG register triggers
+ * an init sequence and hence it must be done
+ * at the end
+ */
+	ldr r0, emif_addr_virt
+	add r0, r0, #EMIF4_0_SDRAM_CONFIG
+	ldr r4, emif_sdcfg_val
+	str r4, [r0]
+
+	mov r0, #0x2000
+wait_loop4:
+	subs   r0, r0, #1
+	bne wait_loop4
+
 	mov	r0, #7
 	ldmfd	sp!, {r4 - r11, pc}	@ restore regs and return
 
@@ -833,7 +848,7 @@ susp_io_pull_cmd2:
 resume_io_pull_data:
 	.word	0x18B
 resume_io_pull_cmd:
-	.word	0x4
+	.word	0x18B
 
 susp_vtp_ctrl_val:
 	.word	0xDEADBEEF
