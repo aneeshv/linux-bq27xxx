@@ -490,15 +490,18 @@ void am33xx_push_sram_idle(void)
 static int __init am33xx_pm_init(void)
 {
 	int ret;
+#ifdef CONFIG_SUSPEND
 	void __iomem *base;
 	u32 reg;
 	u32 evm_id;
 
+#endif
 	if (!cpu_is_am33xx())
 		return -ENODEV;
 
 	pr_info("Power Management for AM33XX family\n");
 
+#ifdef CONFIG_SUSPEND
 /* Read SDRAM_CONFIG register to determine Memory Type */
 	base = am33xx_get_ram_base();
 	reg = readl(base + EMIF4_0_SDRAM_CONFIG);
@@ -522,7 +525,6 @@ static int __init am33xx_pm_init(void)
 	else
 		suspend_cfg_param_list[EVM_ID] = 0xff;
 
-#ifdef CONFIG_SUSPEND
 	(void) clkdm_for_each(clkdms_setup, NULL);
 
 	/* CEFUSE domain should be turned off post bootup */
