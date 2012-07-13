@@ -1979,7 +1979,6 @@ static void mmc1_wl12xx_init(int evm_id, int profile)
 	am335x_mmc[1].name = "wl1271";
 	am335x_mmc[1].caps = MMC_CAP_4_BIT_DATA | MMC_CAP_POWER_OFF_CARD;
 	am335x_mmc[1].nonremovable = true;
-	am335x_mmc[1].pm_caps = MMC_PM_KEEP_POWER;
 	am335x_mmc[1].gpio_cd = -EINVAL;
 	am335x_mmc[1].gpio_wp = -EINVAL;
 	am335x_mmc[1].ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */
