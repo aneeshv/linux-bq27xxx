@@ -2240,12 +2240,11 @@ static void wl12xx_init(int evm_id, int profile)
 		am335xevm_wlan_data.bt_enable_gpio = GPIO_TO_PIN(3, 21);
 		am335xevm_wlan_data.irq =
 				OMAP_GPIO_IRQ(AM335XEVM_SK_WLAN_IRQ_GPIO);
-		am335xevm_wlan_data.platform_quirks =
-				WL12XX_PLATFORM_QUIRK_EDGE_IRQ;
 		setup_pin_mux(wl12xx_pin_mux_sk);
 	} else {
 		setup_pin_mux(wl12xx_pin_mux);
 	}
+	am335xevm_wlan_data.platform_quirks = WL12XX_PLATFORM_QUIRK_EDGE_IRQ;
 	wl12xx_bluetooth_enable();
 
 	if (wl12xx_set_platform_data(&am335xevm_wlan_data))
