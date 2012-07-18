@@ -131,6 +131,7 @@ do {								\
 #define cpsw_add_switch_mode_bcast_ale_entries(priv, slave_port)
 #define cpsw_update_slave_open_state(priv, state)		\
 	priv->slaves[priv->emac_port].open_stat = state;
+#define cpsw_slave_phy_index(priv)	((priv)->emac_port)
 
 #else	/* CONFIG_TI_CPSW_DUAL_EMAC */
 
@@ -152,6 +153,7 @@ do {								\
 	cpsw_ale_add_mcast(priv->ale, priv->ndev->broadcast,		\
 			   1 << slave_port, 0, 0)
 #define cpsw_update_slave_open_state(priv, state)
+#define cpsw_slave_phy_index(priv)	((priv)->data.ethtool_slave)
 
 #endif	/* CONFIG_TI_CPSW_DUAL_EMAC */
 
@@ -2016,7 +2018,7 @@ static int cpsw_get_settings(struct net_device *ndev,
 			     struct ethtool_cmd *ecmd)
 {
 	struct cpsw_priv *priv = netdev_priv(ndev);
-	int slave_no = priv->data.ethtool_slave;
+	int slave_no = cpsw_slave_phy_index(priv);
 
 	if (priv->slaves[slave_no].phy)
 		return phy_ethtool_gset(priv->slaves[slave_no].phy, ecmd);
@@ -2035,7 +2037,7 @@ static int cpsw_get_settings(struct net_device *ndev,
 static int cpsw_set_settings(struct net_device *ndev, struct ethtool_cmd *ecmd)
 {
 	struct cpsw_priv *priv = netdev_priv(ndev);
-	int slave_no = priv->data.ethtool_slave;
+	int slave_no = cpsw_slave_phy_index(priv);
 
 	if (priv->slaves[slave_no].phy)
 		return phy_ethtool_sset(priv->slaves[slave_no].phy, ecmd);
