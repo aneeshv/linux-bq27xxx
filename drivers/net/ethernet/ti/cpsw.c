@@ -355,7 +355,8 @@ static inline void cpsw_add_dual_emac_mode_default_ale_entries(
 	writel(slave->port_vlan, &slave->regs->port_vlan);
 	cpsw_ale_add_vlan(priv->ale, slave->port_vlan,
 		1 << slave_port | 1 << priv->host_port, 0,
-		1 << slave_port | 1 << priv->host_port, 0);
+		1 << slave_port | 1 << priv->host_port,
+		1 << slave_port | 1 << priv->host_port);
 	cpsw_ale_vlan_add_mcast(priv->ale,
 		priv->ndev->broadcast,
 		1 << slave_port | 1 << priv->host_port,
