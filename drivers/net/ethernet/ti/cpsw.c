@@ -2084,7 +2084,6 @@ static int cpsw_init_slave_emac(struct platform_device *pdev,
 		return -ENOMEM;
 	}
 
-	platform_set_drvdata(pdev, ndev);
 	priv_sl2 = netdev_priv(ndev);
 	spin_lock_init(&priv_sl2->lock);
 	priv_sl2->data = *data;
@@ -2151,8 +2150,17 @@ static int cpsw_init_slave_emac(struct platform_device *pdev,
 	return ret;
 }
 
+static inline void cpsw_deinit_slave_emac(struct cpsw_priv *priv)
+{
+	struct net_device *ndev = priv->slaves[1].ndev;
+
+	unregister_netdev(ndev);
+	free_netdev(ndev);
+}
+
 #else
 #define cpsw_init_slave_emac(pdev, priv)	0
+#define cpsw_deinit_slave_emac(priv)
 #endif
 
 static int __devinit cpsw_probe(struct platform_device *pdev)
@@ -2443,6 +2451,7 @@ static int __devexit cpsw_remove(struct platform_device *pdev)
 	msg(notice, probe, "removing device\n");
 	platform_set_drvdata(pdev, NULL);
 
+	cpsw_deinit_slave_emac(priv);
 	omap_dm_timer_free(dmtimer_rx);
 	omap_dm_timer_free(dmtimer_tx);
 	for (i = 0; i < priv->num_irqs; i++)
