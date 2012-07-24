@@ -1106,6 +1106,9 @@ CONFIG_EEPROM_AT24=y
 # Texas Instruments shared transport line discipline
 #
 CONFIG_TI_ST=y
+# TI NFC
+CONFIG_NFC_DEVICES=y
+CONFIG_ST_NFC=y
 # CONFIG_SENSORS_LIS3_SPI is not set
 CONFIG_SENSORS_LIS3_I2C=y
 
