@@ -138,6 +138,8 @@ static int am33xx_pm_suspend(void)
 	else
 		pr_err("Could not program GFX to low power state\n");
 
+	omap3_intc_suspend();
+
 	writel(0x0, AM33XX_CM_MPU_MPU_CLKCTRL);
 
 	ret = cpu_suspend(0, am33xx_do_sram_idle);
