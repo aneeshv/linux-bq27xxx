@@ -2184,12 +2184,22 @@ static struct platform_device btwilink_device = {
 	.id = -1,
 };
 
+#ifdef CONFIG_MACH_AM335XEVM_WILINK8
+static struct platform_device nfcwilink_device = {
+        .name = "nfcwilink",
+        .id = -1,
+};
+#endif
+
 static inline void __init am335xevm_init_btwilink(void)
 {
 	pr_info("am335xevm: bt init\n");
 
 	platform_device_register(&wl12xx_device);
 	platform_device_register(&btwilink_device);
+#ifdef CONFIG_MACH_AM335XEVM_WILINK8
+	platform_device_register(&nfcwilink_device);
+#endif
 }
 #endif
 
