@@ -98,6 +98,8 @@
 int selected_pad;
 int pad_mux_value;
 
+#define LCD7_CAPE_NAME_2    "BeagleBone LCD7 CAPE"
+
 static const struct display_panel disp_panel = {
 	WVGA,
 	32,
@@ -2620,7 +2622,8 @@ static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
 	{
 		pr_info("Detected a daughter card on BeagleBone..");
 
-		if ( strcmp (cape_eeprom_config.board_name, "BeagleBone LCD Cape") == 0)
+		if (!strcmp(cape_eeprom_config.board_name, "BeagleBone LCD Cape") ||
+			!strncmp(cape_eeprom_config.board_name, LCD7_CAPE_NAME_2, sizeof(LCD7_CAPE_NAME_2) - 1))
 		{
 			pr_info("BeagleBone LCD cape board detected\n");
 			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
