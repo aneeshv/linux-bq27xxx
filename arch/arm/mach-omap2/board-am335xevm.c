@@ -85,7 +85,7 @@
 #define AR8051_DEBUG_RGMII_CLK_DLY_REG	0x5
 #define AR8051_RGMII_TX_CLK_DLY		BIT(8)
 
-#define BEAGLEBONE_LCD_AVDD_EN GPIO_TO_PIN(0, 7)
+static int beaglebone_lcd_avdd_en;
 #define BEAGLEBONE_LCD_BL GPIO_TO_PIN(1, 18)
 
 #define AM33XX_CTRL_REGADDR(reg)				\
@@ -99,6 +99,7 @@ int selected_pad;
 int pad_mux_value;
 
 #define LCD7_CAPE_NAME_2    "BeagleBone LCD7 CAPE"
+#define LCD7_CAPE_REV_A1    "00A1"
 
 static const struct display_panel disp_panel = {
 	WVGA,
@@ -1344,8 +1345,8 @@ static void bone_lcdc_init(int evm_id, int profile)
 
 	gpio_request(BEAGLEBONE_LCD_BL, "BONE_LCD_BL");
 	gpio_direction_output(BEAGLEBONE_LCD_BL, 1);
-	gpio_request(BEAGLEBONE_LCD_AVDD_EN, "BONE_LCD_AVDD_EN");
-	gpio_direction_output(BEAGLEBONE_LCD_AVDD_EN, 1);
+	gpio_request(beaglebone_lcd_avdd_en, "BONE_LCD_AVDD_EN");
+	gpio_direction_output(beaglebone_lcd_avdd_en, 1);
 
 	if (am33xx_register_lcdc(&TFC_S9700RTWV35TR_01B_bone_lcd_cape_pdata))
 		pr_info("Failed to register LCDC device\n");
@@ -2623,11 +2624,19 @@ static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
 		pr_info("Detected a daughter card on BeagleBone..");
 
 		if (!strcmp(cape_eeprom_config.board_name, "BeagleBone LCD Cape") ||
-			!strncmp(cape_eeprom_config.board_name, LCD7_CAPE_NAME_2, sizeof(LCD7_CAPE_NAME_2) - 1))
-		{
+			!strncmp(cape_eeprom_config.board_name, LCD7_CAPE_NAME_2, sizeof(LCD7_CAPE_NAME_2) - 1)) {
 			pr_info("BeagleBone LCD cape board detected\n");
 			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
-			printk ("manufacurer : %s", cape_eeprom_config.manufacturer);
+			printk ("Manufacturer : %s", cape_eeprom_config.manufacturer);
+			printk ("Hardware revision : %s", cape_eeprom_config.version);
+
+			if (!strncmp(cape_eeprom_config.version, LCD7_CAPE_REV_A1, sizeof(LCD7_CAPE_REV_A1) - 1))
+				/* rev A1 */
+				beaglebone_lcd_avdd_en = GPIO_TO_PIN(0, 7);
+			else
+				/* rev A2 or later */
+				beaglebone_lcd_avdd_en = GPIO_TO_PIN(1, 31);
+
 			bone_lcdc_init (DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_tsc_init ( DEV_ON_DGHTR_BRD, PROFILE_NONE);
