@@ -101,6 +101,8 @@ int pad_mux_value;
 #define LCD7_CAPE_NAME_2    "BeagleBone LCD7 CAPE"
 #define LCD7_CAPE_REV_A1    "00A1"
 
+#define LCD3_CAPE_NAME		"BeagleBone LCD3 CAPE"
+
 static const struct display_panel disp_panel = {
 	WVGA,
 	32,
@@ -207,6 +209,12 @@ struct da8xx_lcdc_platform_data  NHD_480272MF_ATXI_pdata = {
 	.manu_name              = "NHD",
 	.controller_data        = &lcd_cfg,
 	.type                   = "NHD-4.3-ATXI#-T-1",
+};
+
+struct da8xx_lcdc_platform_data CDTech_S035Q01_pdata = {
+	.manu_name		= "BBToys",
+	.controller_data	= &bone_lcd_cape_cfg,
+	.type			= "CDTech_S035Q01",
 };
 
 #include "common.h"
@@ -1375,7 +1383,7 @@ static void lcdc_init(int evm_id, int profile)
 }
 
 
-static void bone_lcdc_init(int evm_id, int profile)
+static void bone_lcd7_lcdc_init(int evm_id, int profile)
 {
 
 	pr_info("IN : %s \n", __FUNCTION__);
@@ -1412,6 +1420,22 @@ static void vnc_lcdc_init(int evm_id, int profile)
 	}
 	if (am33xx_register_lcdc(&Sharp_LCD035Q3DG01_pdata))
 		pr_info("Failed to register LCDC device\n");
+	return;
+}
+
+static void bone_lcd3_lcdc_init(int evm_id, int profile)
+{
+	setup_pin_mux(lcdc_pin_mux);
+
+	if (conf_disp_pll(16000000)) {
+		pr_info("Failed to set pixclock to 16000000, not attempting to"
+				"register LCD cape\n");
+		return;
+	}
+
+	if (am33xx_register_lcdc(&CDTech_S035Q01_pdata))
+		pr_info("Failed to register Beagleboardtoys 3.5\" LCD cape device\n");
+
 	return;
 }
 
@@ -1885,8 +1909,16 @@ static struct regulator_init_data tps65217_regulator_data[] = {
 	},
 };
 
+struct tps65217_bl_pdata bone_lcd3_bl_pdata[] = {
+	{
+		.isel = TPS65217_BL_ISET1,
+		.fdim = TPS65217_BL_FDIM_200HZ,
+	},
+};
+
 static struct tps65217_board beaglebone_tps65217_info = {
 	.tps65217_init_data = &tps65217_regulator_data[0],
+	.bl_pdata = bone_lcd3_bl_pdata,
 };
 
 static struct lis3lv02d_platform_data lis331dlh_pdata = {
@@ -2682,9 +2714,20 @@ static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
 				/* rev A2 or later */
 				beaglebone_lcd_avdd_en = GPIO_TO_PIN(1, 31);
 
-			bone_lcdc_init (DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			bone_lcd7_lcdc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
-			lcd_cape_tsc_init ( DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			lcd_cape_tsc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			return;
+		}
+		else if (!strncmp(cape_eeprom_config.board_name, LCD3_CAPE_NAME, (sizeof(LCD3_CAPE_NAME)- 1))) {
+			pr_info("BeagleBone LCD3 cape board detected\n");
+			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
+			printk ("Manufacturer : %s\n", cape_eeprom_config.manufacturer);
+			printk ("Hardware revision : %s\n", cape_eeprom_config.version);
+
+			bone_lcd3_lcdc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			lcd_cape_tsc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			return;
 		}
 		else{
