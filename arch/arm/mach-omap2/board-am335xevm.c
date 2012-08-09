@@ -246,8 +246,6 @@ struct da8xx_lcdc_platform_data dvi_pdata = {
 /* TSc controller */
 static struct tsc_data am335x_touchscreen_data  = {
 	.wires  = 4,
-	.x_max = 0x0fff,
-	.y_max = 0x0fff,
 	.x_plate_resistance = 200,
 };
 

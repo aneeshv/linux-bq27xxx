@@ -101,22 +101,12 @@
 
 #define MAX_12BIT                       ((1 << 12) - 1)
 
-#ifdef CONFIG_MACH_AM335XEVM
-/* Define Touch Screen Boundary Limits */
-#define AM335X_TS_XMIN                 0xA5
-#define AM335X_TS_XMAX                 0xFB0
-#define AM335X_TS_YMIN                 0xDC
-#define AM335X_TS_YMAX                 0xF43
-#endif
-
 int pen = 1;
 unsigned int bckup_x = 0, bckup_y = 0;
 
 struct tscadc {
 	struct input_dev	*input;
 	int			wires;
-	u16			x_min, x_max;
-	u16			y_min, y_max;
 	int			x_plate_resistance;
 	int			irq;
 	void __iomem		*tsc_base;
@@ -269,14 +259,6 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 
 			prev_val_y = ready1;
 		}
-
-                /* Calibrate absolute value of x and y co-ordinate */
-		val_x = ts_dev->x_max -
-			((ts_dev->x_max * (val_x - AM335X_TS_XMIN)) /
-				(AM335X_TS_XMAX - AM335X_TS_XMIN));
-                val_y = ts_dev->y_max -
-			((ts_dev->y_max * (val_y - AM335X_TS_YMIN)) /
-				(AM335X_TS_YMAX - AM335X_TS_YMIN));
 
 		if (val_x > bckup_x) {
 			diffx = val_x - bckup_x;
@@ -440,8 +422,6 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	tscadc_writel(ts_dev, TSCADC_REG_CLKDIV, clk_value);
 
 	ts_dev->wires = pdata->wires;
-	ts_dev->x_max = pdata->x_max;
-	ts_dev->y_max = pdata->y_max;
 	ts_dev->x_plate_resistance = pdata->x_plate_resistance;
 
 	/* Set the control register bits */
@@ -482,14 +462,8 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	input_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 	input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
 
-	input_set_abs_params(input_dev, ABS_X,
-			ts_dev->x_min ? : 0,
-			ts_dev->x_max ? : MAX_12BIT,
-			0, 0);
-	input_set_abs_params(input_dev, ABS_Y,
-			ts_dev->y_min ? : 0,
-			ts_dev->y_max ? : MAX_12BIT,
-			0, 0);
+	input_set_abs_params(input_dev, ABS_X, 0, MAX_12BIT, 0, 0);
+	input_set_abs_params(input_dev, ABS_Y, 0, MAX_12BIT, 0, 0);
 	input_set_abs_params(input_dev, ABS_PRESSURE, 0, MAX_12BIT, 0, 0);
 
 	/* register to the input system */
