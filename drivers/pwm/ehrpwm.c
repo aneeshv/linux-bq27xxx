@@ -1585,9 +1585,11 @@ static int __devexit ehrpwm_remove(struct platform_device *pdev)
 
 	if (ehrpwm->version == PWM_VERSION_1) {
 		pdata = (&pdev->dev)->platform_data;
+		pm_runtime_get_sync(ehrpwm->dev);
 		val = readw(ehrpwm->config_mem_base + PWMSS_CLKCONFIG);
 		val &= ~BIT(EPWM_CLK_EN);
 		writew(val, ehrpwm->config_mem_base + PWMSS_CLKCONFIG);
+		pm_runtime_put_sync(ehrpwm->dev);
 		iounmap(ehrpwm->config_mem_base);
 		ehrpwm->config_mem_base = NULL;
 	}
