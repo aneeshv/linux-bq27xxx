@@ -414,9 +414,11 @@ static int __devexit ecap_remove(struct platform_device *pdev)
 
 	if (ep->version == PWM_VERSION_1) {
 		pdata = (&pdev->dev)->platform_data;
+		pm_runtime_get_sync(ep->dev);
 		val = readw(ep->config_mem_base + PWMSS_CLKCONFIG);
 		val &= ~BIT(ECAP_CLK_EN);
 		writew(val, ep->config_mem_base + PWMSS_CLKCONFIG);
+		pm_runtime_put_sync(ep->dev);
 		iounmap(ep->config_mem_base);
 		ep->config_mem_base = NULL;
 	}
