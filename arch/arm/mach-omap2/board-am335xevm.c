@@ -1027,45 +1027,63 @@ static void volume_keys_init(int evm_id, int profile)
 		pr_err("failed to register matrix keypad (2x3) device\n");
 }
 
-/* pinmux for LCD cape keypad device */
+/* Pinmux for Beaglebone LCD cape keypad device */
 static struct pinmux_config lcd_cape_keys_pin_mux[] = {
 	{"gpmc_a0.gpio1_16",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
 	{"gpmc_a1.gpio1_17",    OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
-	{"gpmc_csn2.gpio1_31",    OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_a3.gpio1_19",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"mcasp0_axr0.gpio3_16",    OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"mcasp0_fsr.gpio3_19",    OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
 	{NULL, 0},
 };
 
-/* Configure GPIOs for Volume Keys */
-static struct gpio_keys_button lcd_cape_gpio_buttons[] = {
+/* Configure GPIOs for Beaglebone LCD cape keys */
+static struct gpio_keys_button lcd_cape_gpio_keys[] = {
 	{
-		.code                   = KEY_MENU,
+		.code                   = KEY_LEFT,
 		.gpio                   = GPIO_TO_PIN(1, 16),
 		.active_low             = true,
-		.desc                   = "menu",
+		.desc                   = "left",
 		.type                   = EV_KEY,
 		.wakeup                 = 1,
 	},
 	{
-		.code                   = KEY_POWER,
+		.code                   = KEY_RIGHT,
 		.gpio                   = GPIO_TO_PIN(1, 17),
 		.active_low             = true,
-		.desc                   = "power",
+		.desc                   = "right",
 		.type                   = EV_KEY,
 		.wakeup                 = 1,
 	},
 	{
-		.code                   = KEY_BACK,
-		.gpio                   = GPIO_TO_PIN(1, 31),
+		.code                   = KEY_UP,
+		.gpio                   = GPIO_TO_PIN(1, 19),
 		.active_low             = true,
-		.desc                   = "back",
+		.desc                   = "up",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+	{
+		.code                   = KEY_DOWN,
+		.gpio                   = GPIO_TO_PIN(3, 16),
+		.active_low             = true,
+		.desc                   = "down",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+	{
+		.code                   = KEY_ENTER,
+		.gpio                   = GPIO_TO_PIN(3, 19),
+		.active_low             = true,
+		.desc                   = "enter",
 		.type                   = EV_KEY,
 		.wakeup                 = 1,
 	},
 };
 
 static struct gpio_keys_platform_data lcd_cape_gpio_key_info = {
-	.buttons        = lcd_cape_gpio_buttons,
-	.nbuttons       = ARRAY_SIZE(lcd_cape_gpio_buttons),
+	.buttons        = lcd_cape_gpio_keys,
+	.nbuttons       = ARRAY_SIZE(lcd_cape_gpio_keys),
 };
 
 static struct platform_device lcd_cape_keys = {
@@ -1079,11 +1097,10 @@ static struct platform_device lcd_cape_keys = {
 static void lcd_cape_keys_init(int evm_id, int profile)
 {
 	int err;
-
 	setup_pin_mux(lcd_cape_keys_pin_mux);
 	err = platform_device_register(&lcd_cape_keys);
 	if (err)
-		pr_err("failed to register lcd cape keypad device\n");
+		pr_err("Failed to register Keypad for Beaglebone LCD cape\n");
 }
 
 /*
