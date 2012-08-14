@@ -107,6 +107,8 @@ unsigned int bckup_x = 0, bckup_y = 0;
 struct tscadc {
 	struct input_dev	*input;
 	int			wires;
+	struct tsc_axis		x;
+	struct tsc_axis		y;
 	int			x_plate_resistance;
 	int			irq;
 	void __iomem		*tsc_base;
@@ -234,6 +236,10 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 		for (i = 0; i < (fifo0count-1); i++) {
 			readx1 = tscadc_readl(ts_dev, TSCADC_REG_FIFO0);
 			readx1 = readx1 & 0xfff;
+
+			if (ts_dev->x.inverted)
+				readx1 = ts_dev->x.max - readx1 + ts_dev->x.min;
+
 			if (readx1 > prev_val_x)
 				cur_diff_x = readx1 - prev_val_x;
 			else
@@ -246,7 +252,11 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 
 			prev_val_x = readx1;
 			ready1 = tscadc_readl(ts_dev, TSCADC_REG_FIFO1);
-				ready1 &= 0xfff;
+			ready1 = ready1 & 0xfff;
+
+			if (ts_dev->y.inverted)
+				ready1 = ts_dev->y.max - ready1 + ts_dev->y.min;
+
 			if (ready1 > prev_val_y)
 				cur_diff_y = ready1 - prev_val_y;
 			else
@@ -422,6 +432,12 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	tscadc_writel(ts_dev, TSCADC_REG_CLKDIV, clk_value);
 
 	ts_dev->wires = pdata->wires;
+	ts_dev->x.min = pdata->x.min;
+	ts_dev->x.max = pdata->x.max;
+	ts_dev->x.inverted = pdata->x.inverted;
+	ts_dev->y.min = pdata->y.min;
+	ts_dev->y.max = pdata->y.max;
+	ts_dev->y.inverted = pdata->y.inverted;
 	ts_dev->x_plate_resistance = pdata->x_plate_resistance;
 
 	/* Set the control register bits */
@@ -462,8 +478,14 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	input_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 	input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
 
-	input_set_abs_params(input_dev, ABS_X, 0, MAX_12BIT, 0, 0);
-	input_set_abs_params(input_dev, ABS_Y, 0, MAX_12BIT, 0, 0);
+	input_set_abs_params(input_dev, ABS_X,
+			ts_dev->x.min ? : 0,
+			ts_dev->x.max ? : MAX_12BIT,
+			0, 0);
+	input_set_abs_params(input_dev, ABS_Y,
+			ts_dev->y.min ? : 0,
+			ts_dev->y.max ? : MAX_12BIT,
+			0, 0);
 	input_set_abs_params(input_dev, ABS_PRESSURE, 0, MAX_12BIT, 0, 0);
 
 	/* register to the input system */

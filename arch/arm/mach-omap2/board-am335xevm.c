@@ -243,9 +243,39 @@ struct da8xx_lcdc_platform_data dvi_pdata = {
 	.type      = "1024x768@60",
 };
 
-/* TSc controller */
-static struct tsc_data am335x_touchscreen_data  = {
-	.wires  = 4,
+/* Touchscreen Controller Data for AM335xEVM */
+/* Calibrated on AM335xEVM Rev. 1.1A and 1.2A */
+/* The values have to be fine tuned for other revisions, if requred */
+static struct tsc_data am335xevm_touchscreen_data = {
+	.wires = 4,
+	.x = {
+		.min = 0xCB,
+		.max = 0xF9B,
+		.inverted = 1,
+	},
+	.y = {
+		.min = 0xC8,
+		.max = 0xE93,
+		.inverted = 1,
+	},
+	.x_plate_resistance = 200,
+};
+
+/* Touchscreen Controller Data for Beaglebone Cape */
+/* Calibrated on Beaglebone LCD7 Cape Rev. A1 and A2 */
+/* The values have to be fine tuned for other revisions, if requred */
+static struct tsc_data beaglebone_touchscreen_data = {
+	.wires = 4,
+	.x = {
+		.min = 0x64,
+		.max = 0xF86,
+		.inverted = 0,
+	},
+	.y = {
+		.min = 0x10C,
+		.max = 0xEBD,
+		.inverted = 0,
+	},
 	.x_plate_resistance = 200,
 };
 
@@ -1414,7 +1444,7 @@ static void tsc_init(int evm_id, int profile)
 	int err;
 
 	setup_pin_mux(tsc_pin_mux);
-	err = am33xx_register_tsc(&am335x_touchscreen_data);
+	err = am33xx_register_tsc(&am335xevm_touchscreen_data);
 	if (err)
 		pr_err("failed to register touchscreen device\n");
 }
@@ -1425,7 +1455,7 @@ static void lcd_cape_tsc_init(int evm_id, int profile)
 
 	pr_info("IN : %s \n", __FUNCTION__);
 	setup_pin_mux(tsc_pin_mux);
-	err = am33xx_register_tsc (&am335x_touchscreen_data);
+	err = am33xx_register_tsc (&beaglebone_touchscreen_data);
 	if (err)
 		pr_err("failed to register touchscreen device\n");
 
