@@ -94,15 +94,20 @@
 
 #define AQSFRC_ACTA_MASK		(BIT(1) | BIT(0))
 #define AQSFRC_ACTB_MASK		(BIT(4) | BIT(3))
-#define AQCSFRC_CFRC_LOAD_MASK		(BIT(7) | BIT(6))
-#define AQCSFRC_OUTB_MASK		(BIT(3) | BIT(2))
-#define AQCSFRC_OUTA_MASK		(BIT(1) | BIT(0))
 
 #define AQSFRC_ACTB_POS			0x3
 #define AQSFRC_OTFRCA_POS		0x2
 #define AQSFRC_OTFRCB_POS		0x5
-#define AQSFRC_LDMD_POS			0x6
 
+#define AQSFRC_RLDCSF_ZRO		0
+#define AQSFRC_RLDCSF_IMDT		(BIT(1) | BIT(0))
+#define AQSFRC_LDMD_POS			0x6
+#define AQSFRC_CFRC_LOAD_MASK		(BIT(7) | BIT(6))
+
+#define AQCSFRC_CSF_FRCDIS		0
+#define AQCSFRC_CSF_FRCLOW		BIT(0)
+#define AQCSFRC_OUTB_MASK		(BIT(3) | BIT(2))
+#define AQCSFRC_OUTA_MASK		(BIT(1) | BIT(0))
 #define AQCSFRC_OUTB_POS		0x2
 
 /******************** Dead Band Generator Sub module *******************/
@@ -434,7 +439,7 @@ int ehrpwm_aq_set_csfrc_load_mode(struct pwm_device *p, unsigned char loadmode)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, AQSFRC, loadmode << AQSFRC_LDMD_POS,
-		       AQCSFRC_CFRC_LOAD_MASK);
+		       AQSFRC_CFRC_LOAD_MASK);
 
 	return 0;
 }
@@ -897,6 +902,26 @@ inline int ehrpwm_reg_write(struct pwm_device *p, unsigned int reg,
 }
 EXPORT_SYMBOL(ehrpwm_reg_write);
 
+
+static void ehrpwm_channel_output_low(struct pwm_device *p)
+{
+	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
+	int chan = p - &ehrpwm->pwm[0];
+
+	ehrpwm_aq_set_csfrc_load_mode(p, AQSFRC_RLDCSF_IMDT);
+	ehrpwm_aq_continuous_frc(p, chan, AQCSFRC_CSF_FRCLOW);
+}
+
+static void ehrpwm_channel_output_enable(struct pwm_device *p, int channel)
+{
+	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
+
+	pm_runtime_get_sync(ehrpwm->dev);
+	ehrpwm_aq_set_csfrc_load_mode(p, AQSFRC_RLDCSF_ZRO);
+	ehrpwm_aq_continuous_frc(p, channel, AQCSFRC_CSF_FRCDIS);
+	pm_runtime_put_sync(ehrpwm->dev);
+}
+
 static int ehrpwm_pwm_set_pol(struct pwm_device *p)
 {
 	unsigned int act_ctrl_reg;
@@ -934,10 +959,7 @@ static int ehrpwm_pwm_start(struct pwm_device *p)
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 	unsigned short val;
-	unsigned short read_val1;
-	unsigned short read_val2;
 	int chan;
-
 
 	/* Trying to start a running PWM, not allowed */
 	if (pwm_is_running(p))
@@ -952,19 +974,9 @@ static int ehrpwm_pwm_start(struct pwm_device *p)
 	val = (val & ~TBCTL_CTRMODE_MASK) | (TBCTL_CTRMOD_CTRUP |
 		 TBCTL_FREERUN_FREE << 14);
 	ehrpwm_write(ehrpwm, TBCTL, val);
-	ehrpwm_tz_set_action(p, chan, 0x3);
-	read_val1 = ehrpwm_read(ehrpwm, TZFLG);
-	read_val2 = ehrpwm_read(ehrpwm, TZCTL);
-	/*
-	 * State of the other channel is determined by reading the
-	 * TZCTL register. If the other channel is also in running state,
-	 * one shot event status is cleared, otherwise one shot action for
-	 * this channel is set to "DO NOTHING.
-	 */
-	read_val2 = read_val2 & (chan ? 0x3 : (0x3 << 2));
-	read_val2 = chan ? read_val2 : (read_val2 >> 2);
-	if (!(read_val1 & 0x4) || (read_val2 == 0x3))
-		ehrpwm_tz_clr_evt_status(p);
+
+	/* Enable PWM channel output */
+	ehrpwm_channel_output_enable(p, chan);
 
 	set_bit(FLAG_RUNNING, &p->flags);
 	return 0;
@@ -978,25 +990,13 @@ static int ehrpwm_pwm_start(struct pwm_device *p)
 static int ehrpwm_pwm_stop(struct pwm_device *p)
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
-	unsigned short read_val;
-	int chan;
 
 	/* Trying to stop a non-running PWM, not allowed */
 	if (!pwm_is_running(p))
 		return -EPERM;
 
-	chan = p - &ehrpwm->pwm[0];
-	/* Set the Trip Zone Action to low */
-	ehrpwm_tz_set_action(p, chan, 0x2);
-	read_val = ehrpwm_read(ehrpwm, TZFLG);
-	/*
-	 * If the channel is already in stop state, Trip Zone software force is
-	 * not required
-	 */
-	if (!(read_val & 0x4)) {
-		ehrpwm_tz_clr_evt_status(p);
-		ehrpwm_tz_force_evt(p, TZ_ONE_SHOT_EVENT);
-	}
+	/* Put PWM output to low */
+	ehrpwm_channel_output_low(p);
 
 	/* For PWM clock should be disabled on stop */
 	pm_runtime_put_sync(ehrpwm->dev);
@@ -1522,12 +1522,10 @@ void ehrpwm_context_save(struct ehrpwm_pwm *ehrpwm,
 		ehrpwm_ctx->hrcfg = ehrpwm_read(ehrpwm, HRCNFG);
 	ehrpwm_ctx->aqctla = ehrpwm_read(ehrpwm, AQCTLA);
 	ehrpwm_ctx->aqctlb = ehrpwm_read(ehrpwm, AQCTLB);
+	ehrpwm_ctx->aqsfrc = ehrpwm_read(ehrpwm, AQSFRC);
+	ehrpwm_ctx->aqcsfrc = ehrpwm_read(ehrpwm, AQCSFRC);
 	ehrpwm_ctx->cmpa = ehrpwm_read(ehrpwm, CMPA);
 	ehrpwm_ctx->cmpb = ehrpwm_read(ehrpwm, CMPB);
-	ehrpwm_ctx->tzctl = ehrpwm_read(ehrpwm, TZCTL);
-	ehrpwm_ctx->tzflg = ehrpwm_read(ehrpwm, TZFLG);
-	ehrpwm_ctx->tzclr = ehrpwm_read(ehrpwm, TZCLR);
-	ehrpwm_ctx->tzfrc = ehrpwm_read(ehrpwm, TZFRC);
 	pm_runtime_put_sync(ehrpwm->dev);
 }
 
@@ -1542,12 +1540,10 @@ void ehrpwm_context_restore(struct ehrpwm_pwm *ehrpwm,
 		ehrpwm_write(ehrpwm, HRCNFG, ehrpwm_ctx->hrcfg);
 	ehrpwm_write(ehrpwm, AQCTLA, ehrpwm_ctx->aqctla);
 	ehrpwm_write(ehrpwm, AQCTLB, ehrpwm_ctx->aqctlb);
+	ehrpwm_write(ehrpwm, AQSFRC, ehrpwm_ctx->aqsfrc);
+	ehrpwm_write(ehrpwm, AQCSFRC, ehrpwm_ctx->aqcsfrc);
 	ehrpwm_write(ehrpwm, CMPA, ehrpwm_ctx->cmpa);
 	ehrpwm_write(ehrpwm, CMPB, ehrpwm_ctx->cmpb);
-	ehrpwm_write(ehrpwm, TZCTL, ehrpwm_ctx->tzctl);
-	ehrpwm_write(ehrpwm, TZFLG, ehrpwm_ctx->tzflg);
-	ehrpwm_write(ehrpwm, TZCLR, ehrpwm_ctx->tzclr);
-	ehrpwm_write(ehrpwm, TZFRC, ehrpwm_ctx->tzfrc);
 }
 
 static int ehrpwm_suspend(struct platform_device *pdev, pm_message_t state)
