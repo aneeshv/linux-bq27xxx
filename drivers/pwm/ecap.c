@@ -164,6 +164,12 @@ static int ecap_pwm_config_duty(struct pwm_device *p)
 	}
 	spin_unlock_irqrestore(&ep->lock, flags);
 
+	if (!pwm_is_running(p)) {
+		v = readw(ep->mmio_base + CAPTURE_CTRL2_REG);
+		v &= ~ECTRL2_MDSL_ECAP;
+		writew(v, ep->mmio_base + CAPTURE_CTRL2_REG);
+	}
+
 	pm_runtime_put_sync(ep->dev);
 	return 0;
 }
