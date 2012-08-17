@@ -336,9 +336,9 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 	if (tx != NULL) {
 		int a_cnt, b_cnt, c_cnt, b_cntrld;
 
-		a_cnt    = 1;
+		a_cnt    = 1 << data_type;
 		b_cnt    = 1;
-		c_cnt    = (element_count / a_cnt) / 256;
+		c_cnt    = element_count / 256;
 		b_cntrld = SZ_64K - 1;
 
 		param.opt          = TCINTEN |
@@ -348,7 +348,7 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 		param.dst          = tx_reg;
 		param.src_dst_bidx = a_cnt;
 		param.link_bcntrld = b_cntrld << 16;
-		param.src_dst_cidx = b_cnt;
+		param.src_dst_cidx = a_cnt;
 		param.ccnt         = element_count;
 		edma_write_slot(mcspi_dma->dma_tx_channel, &param);
 		edma_link(mcspi_dma->dma_tx_channel,
@@ -358,8 +358,8 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 	if (rx != NULL) {
 		int a_cnt, b_cnt, c_cnt, b_cntrld;
 
-		a_cnt    = 1;
-		c_cnt    = (element_count / a_cnt) / (SZ_64K - 1);
+		a_cnt    = 1 << data_type;
+		c_cnt    = element_count / (SZ_64K - 1);
 		b_cnt    = element_count - c_cnt * (SZ_64K - 1);
 		b_cntrld = SZ_64K - 1;
 
@@ -379,7 +379,7 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 		param.dst          = xfer->rx_dma;
 		param.src_dst_bidx = a_cnt << 16;
 		param.link_bcntrld = b_cntrld << 16;
-		param.src_dst_cidx = 1 << 16;
+		param.src_dst_cidx = a_cnt << 16;
 		param.ccnt         = c_cnt;
 		edma_write_slot(mcspi_dma->dma_rx_channel, &param);
 		edma_link(mcspi_dma->dma_rx_channel,
