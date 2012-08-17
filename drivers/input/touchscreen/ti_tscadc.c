@@ -146,6 +146,7 @@ struct tscadc {
 	int			irq;
 	void __iomem		*tsc_base;
 	unsigned int		ctrl;
+	int			steps_to_config;
 };
 
 static unsigned int tscadc_readl(struct tscadc *ts, unsigned int reg)
@@ -164,12 +165,13 @@ static void tsc_step_config(struct tscadc *ts_dev)
 	unsigned int	stepconfigx = 0, stepconfigy = 0;
 	unsigned int	delay, chargeconfig = 0;
 	unsigned int	stepconfigz1 = 0, stepconfigz2 = 0;
-	int i;
+	int		i, total_steps;
 
 	/* Configure the Step registers */
 
 	delay = TSCADC_STEPCONFIG_SAMPLEDLY | TSCADC_STEPCONFIG_OPENDLY;
 
+	total_steps = 2 * ts_dev->steps_to_config;
 	stepconfigx = TSCADC_STEPCONFIG_MODE_HWSYNC |
 			TSCADC_STEPCONFIG_AVG_16 | TSCADC_STEPCONFIG_XPP;
 
@@ -190,7 +192,7 @@ static void tsc_step_config(struct tscadc *ts_dev)
 		break;
 	}
 
-	for (i = 1; i < 7; i++) {
+	for (i = 1; i <= ts_dev->steps_to_config; i++) {
 		tscadc_writel(ts_dev, TSCADC_REG_STEPCONFIG(i), stepconfigx);
 		tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY(i), delay);
 	}
@@ -212,7 +214,7 @@ static void tsc_step_config(struct tscadc *ts_dev)
 		break;
 	}
 
-	for (i = 7; i < 13; i++) {
+	for (i = (ts_dev->steps_to_config + 1); i <= total_steps; i++) {
 		tscadc_writel(ts_dev, TSCADC_REG_STEPCONFIG(i), stepconfigy);
 		tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY(i), delay);
 	}
@@ -230,10 +232,12 @@ static void tsc_step_config(struct tscadc *ts_dev)
 			TSCADC_STEPCONFIG_YPN | TSCADC_STEPCONFIG_INM_ADCREFM;
 	stepconfigz2 = stepconfigz1 | TSCADC_STEPCONFIG_INP_AN3 |
 				TSCADC_STEPCONFIG_FIFO1;
-	tscadc_writel(ts_dev, TSCADC_REG_STEPCONFIG13, stepconfigz1);
-	tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY13, delay);
-	tscadc_writel(ts_dev, TSCADC_REG_STEPCONFIG14, stepconfigz2);
-	tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY14, delay);
+	tscadc_writel(ts_dev, TSCADC_REG_STEPCONFIG(total_steps + 1),
+						stepconfigz1);
+	tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY(total_steps + 1), delay);
+	tscadc_writel(ts_dev, TSCADC_REG_STEPCONFIG(total_steps + 2),
+						stepconfigz2);
+	tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY(total_steps + 2), delay);
 
 	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
 }
@@ -474,6 +478,7 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	ts_dev->y.max = pdata->y.max;
 	ts_dev->y.inverted = pdata->y.inverted;
 	ts_dev->x_plate_resistance = pdata->x_plate_resistance;
+	ts_dev->steps_to_config = pdata->steps_to_configure;
 
 	/* Set the control register bits */
 	ctrl = TSCADC_CNTRLREG_STEPCONFIGWRT |
@@ -502,7 +507,7 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 
 	tsc_step_config(ts_dev);
 
-	tscadc_writel(ts_dev, TSCADC_REG_FIFO1THR, 6);
+	tscadc_writel(ts_dev, TSCADC_REG_FIFO1THR, ts_dev->steps_to_config);
 
 	ctrl |= TSCADC_CNTRLREG_TSCSSENB;
 	tscadc_writel(ts_dev, TSCADC_REG_CTRL, ctrl);
@@ -619,7 +624,7 @@ static int tscadc_resume(struct platform_device *pdev)
 	tscadc_writel(ts_dev, TSCADC_REG_CTRL, restore);
 	tsc_idle_config(ts_dev);
 	tsc_step_config(ts_dev);
-	tscadc_writel(ts_dev, TSCADC_REG_FIFO1THR, 6);
+	tscadc_writel(ts_dev, TSCADC_REG_FIFO1THR, ts_dev->steps_to_config);
 	restore = tscadc_readl(ts_dev, TSCADC_REG_CTRL);
 	tscadc_writel(ts_dev, TSCADC_REG_CTRL,
 			(restore | TSCADC_CNTRLREG_TSCSSENB));

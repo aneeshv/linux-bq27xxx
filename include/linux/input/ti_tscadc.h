@@ -19,6 +19,11 @@ struct tsc_axis {
  * @x:			Minimum and Maximum boundary for X axis.
  * @y:			Minimum and Maximum boundary for Y axis.
  * @x_plate_resistance:	X plate resistance.
+ * @steps_to_configure: The sequencer supports a total of
+ *			16 programmable steps.
+ *			A step configured to read a single
+ *			co-ordinate value, can be applied
+ *			more number of times for better results.
  */
 
 struct tsc_data {
@@ -26,4 +31,5 @@ struct tsc_data {
 	struct tsc_axis x;
 	struct tsc_axis y;
 	int x_plate_resistance;
+	int steps_to_configure;
 };
