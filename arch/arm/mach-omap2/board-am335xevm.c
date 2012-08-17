@@ -264,6 +264,7 @@ static struct tsc_data am335xevm_touchscreen_data = {
 		.inverted = 1,
 	},
 	.x_plate_resistance = 200,
+	.steps_to_configure = 5,
 };
 
 /* Touchscreen Controller Data for Beaglebone Cape */
@@ -282,6 +283,7 @@ static struct tsc_data beaglebone_touchscreen_data = {
 		.inverted = 0,
 	},
 	.x_plate_resistance = 200,
+	.steps_to_configure = 5,
 };
 
 static u8 am335x_iis_serializer_direction1[] = {

@@ -64,6 +64,7 @@
 #define TSCADC_STPENB_STEPENB		TSCADC_STEPENB(0x7FFF)
 
 /* IRQ enable */
+#define TSCADC_IRQENB_FIFO0THRES	BIT(2)
 #define TSCADC_IRQENB_FIFO1THRES	BIT(5)
 #define TSCADC_IRQENB_PENUP		BIT(9)
 #define TSCADC_IRQENB_HW_PEN		BIT(0)
@@ -269,7 +270,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 
 	status = tscadc_readl(ts_dev, TSCADC_REG_IRQSTATUS);
 
-	if (status & TSCADC_IRQENB_FIFO1THRES) {
+	if (status & TSCADC_IRQENB_FIFO0THRES) {
 		fifo0count = tscadc_readl(ts_dev, TSCADC_REG_FIFO0CNT);
 		fifo1count = tscadc_readl(ts_dev, TSCADC_REG_FIFO1CNT);
 		for (i = 0; i < (fifo0count-1); i++) {
@@ -354,7 +355,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 				}
 			}
 		}
-		irqclr |= TSCADC_IRQENB_FIFO1THRES;
+		irqclr |= TSCADC_IRQENB_FIFO0THRES;
 	}
 
 	udelay(315);
@@ -502,12 +503,12 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	tsc_idle_config(ts_dev);
 
 	/* IRQ Enable */
-	irqenable = TSCADC_IRQENB_FIFO1THRES;
+	irqenable = TSCADC_IRQENB_FIFO0THRES;
 	tscadc_writel(ts_dev, TSCADC_REG_IRQENABLE, irqenable);
 
 	tsc_step_config(ts_dev);
 
-	tscadc_writel(ts_dev, TSCADC_REG_FIFO1THR, ts_dev->steps_to_config);
+	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR, ts_dev->steps_to_config);
 
 	ctrl |= TSCADC_CNTRLREG_TSCSSENB;
 	tscadc_writel(ts_dev, TSCADC_REG_CTRL, ctrl);
@@ -624,7 +625,7 @@ static int tscadc_resume(struct platform_device *pdev)
 	tscadc_writel(ts_dev, TSCADC_REG_CTRL, restore);
 	tsc_idle_config(ts_dev);
 	tsc_step_config(ts_dev);
-	tscadc_writel(ts_dev, TSCADC_REG_FIFO1THR, ts_dev->steps_to_config);
+	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR, ts_dev->steps_to_config);
 	restore = tscadc_readl(ts_dev, TSCADC_REG_CTRL);
 	tscadc_writel(ts_dev, TSCADC_REG_CTRL,
 			(restore | TSCADC_CNTRLREG_TSCSSENB));
