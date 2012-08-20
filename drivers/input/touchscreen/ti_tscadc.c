@@ -28,7 +28,6 @@
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 
-#define TSCADC_REG_IRQEOI		0x020
 #define TSCADC_REG_RAWIRQSTATUS		0x024
 #define TSCADC_REG_IRQSTATUS		0x028
 #define TSCADC_REG_IRQENABLE		0x02C
@@ -379,9 +378,6 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 	irqclr |= TSCADC_IRQENB_HW_PEN;
 
 	tscadc_writel(ts_dev, TSCADC_REG_IRQSTATUS, irqclr);
-
-	/* check pending interrupts */
-	tscadc_writel(ts_dev, TSCADC_REG_IRQEOI, 0x0);
 
 	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
 	return IRQ_HANDLED;
