@@ -142,6 +142,14 @@ config TPS6507X
 	  This driver can also be built as a module.  If so, the module
 	  will be called tps6507x.
 
+config MFD_TI_TSCADC
+	tristate "TI ADC / Touch Screen chip support"
+	help
+	  If you say yes here you get support for Texas Instruments series
+	  of Touch Screen /ADC chips.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ti_tscadc.
+
 config MFD_TPS65217
 	tristate "TPS65217 Power Management / White LED chips"
 	depends on I2C
