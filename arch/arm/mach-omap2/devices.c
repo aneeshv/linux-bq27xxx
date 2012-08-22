@@ -25,7 +25,7 @@
 #include <linux/can/platform/d_can.h>
 #include <linux/platform_data/uio_pruss.h>
 #include <linux/pwm/pwm.h>
-#include <linux/input/ti_tscadc.h>
+#include <linux/input/ti_tsc.h>
 
 #include <mach/hardware.h>
 #include <mach/irqs.h>

@@ -24,7 +24,7 @@
 #include <linux/clk.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
-#include <linux/input/ti_tscadc.h>
+#include <linux/input/ti_tsc.h>
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 
