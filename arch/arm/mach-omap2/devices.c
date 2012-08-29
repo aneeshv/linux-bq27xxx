@@ -25,7 +25,7 @@
 #include <linux/can/platform/d_can.h>
 #include <linux/platform_data/uio_pruss.h>
 #include <linux/pwm/pwm.h>
-#include <linux/input/ti_tsc.h>
+#include <linux/mfd/ti_tscadc.h>
 
 #include <mach/hardware.h>
 #include <mach/irqs.h>
@@ -174,22 +174,22 @@ int __init am33xx_register_lcdc(struct da8xx_lcdc_platform_data *pdata)
 	return 0;
 }
 
-int __init am33xx_register_tsc(struct tsc_data *pdata)
+int __init am33xx_register_mfd_tscadc(struct mfd_tscadc_board *pdata)
 {
 	int id = -1;
 	struct platform_device *pdev;
 	struct omap_hwmod *oh;
 	char *oh_name = "adc_tsc";
-	char *dev_name = "tsc";
+	char *dev_name = "ti_tscadc";
 
 	oh = omap_hwmod_lookup(oh_name);
 	if (!oh) {
-		pr_err("Could not look up TSC%d hwmod\n", id);
+		pr_err("Could not look up TSCADC%d hwmod\n", id);
 		return -ENODEV;
 	}
 
 	pdev = omap_device_build(dev_name, id, oh, pdata,
-			sizeof(struct tsc_data), NULL, 0, 0);
+			sizeof(struct mfd_tscadc_board), NULL, 0, 0);
 
 	WARN(IS_ERR(pdev), "Can't build omap_device for %s:%s.\n",
 			dev_name, oh->name);
