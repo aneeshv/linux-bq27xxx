@@ -170,6 +170,7 @@ static int __devinit ti_tscadc_probe(struct platform_device *pdev)
 	if (err < 0)
 		goto err_fail;
 
+	device_init_wakeup(&pdev->dev, true);
 	platform_set_drvdata(pdev, tscadc);
 	return 0;
 
@@ -206,6 +207,37 @@ static int __devexit ti_tscadc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int tscadc_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct ti_tscadc_dev	*tscadc_dev = platform_get_drvdata(pdev);
+
+	tscadc_writel(tscadc_dev, TSCADC_REG_SE, 0x00);
+	pm_runtime_put_sync(&pdev->dev);
+	return 0;
+}
+
+static int tscadc_resume(struct platform_device *pdev)
+{
+	struct ti_tscadc_dev	*tscadc_dev = platform_get_drvdata(pdev);
+	unsigned int restore, ctrl;
+
+	pm_runtime_get_sync(&pdev->dev);
+
+	/* context restore */
+	ctrl = TSCADC_CNTRLREG_STEPCONFIGWRT |
+			TSCADC_CNTRLREG_TSCENB |
+			TSCADC_CNTRLREG_STEPID |
+			TSCADC_CNTRLREG_4WIRE;
+	tscadc_writel(tscadc_dev, TSCADC_REG_CTRL, ctrl);
+	tscadc_idle_config(tscadc_dev);
+	tscadc_writel(tscadc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
+	restore = tscadc_readl(tscadc_dev, TSCADC_REG_CTRL);
+	tscadc_writel(tscadc_dev, TSCADC_REG_CTRL,
+			(restore | TSCADC_CNTRLREG_TSCSSENB));
+
+	return 0;
+}
+
 static struct platform_driver ti_tscadc_driver = {
 	.driver = {
 		.name   = "ti_tscadc",
@@ -213,7 +245,8 @@ static struct platform_driver ti_tscadc_driver = {
 	},
 	.probe	= ti_tscadc_probe,
 	.remove	= __devexit_p(ti_tscadc_remove),
-
+	.suspend = tscadc_suspend,
+	.resume = tscadc_resume,
 };
 
 module_platform_driver(ti_tscadc_driver);

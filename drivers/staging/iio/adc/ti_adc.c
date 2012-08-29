@@ -200,6 +200,36 @@ static int __devexit tiadc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int adc_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct ti_tscadc_dev   *tscadc_dev = pdev->dev.platform_data;
+	struct adc_device	*adc_dev = tscadc_dev->adc;
+	unsigned int idle;
+
+	if (!device_may_wakeup(tscadc_dev->dev)) {
+		idle = adc_readl(adc_dev, TSCADC_REG_CTRL);
+		idle &= ~(TSCADC_CNTRLREG_TSCSSENB);
+		adc_writel(adc_dev, TSCADC_REG_CTRL, (idle |
+				TSCADC_CNTRLREG_POWERDOWN));
+	}
+	return 0;
+}
+
+static int adc_resume(struct platform_device *pdev)
+{
+	struct ti_tscadc_dev   *tscadc_dev = pdev->dev.platform_data;
+	struct adc_device	*adc_dev = tscadc_dev->adc;
+	unsigned int restore;
+
+	/* Make sure ADC is powered up */
+	restore = adc_readl(adc_dev, TSCADC_REG_CTRL);
+	restore &= ~(TSCADC_CNTRLREG_POWERDOWN);
+	adc_writel(adc_dev, TSCADC_REG_CTRL, restore);
+
+	adc_step_config(adc_dev);
+	return 0;
+}
+
 static struct platform_driver tiadc_driver = {
 	.driver = {
 		.name   = "tiadc",
@@ -207,6 +237,8 @@ static struct platform_driver tiadc_driver = {
 	},
 	.probe          = tiadc_probe,
 	.remove         = __devexit_p(tiadc_remove),
+	.suspend = adc_suspend,
+	.resume = adc_resume,
 };
 
 module_platform_driver(tiadc_driver);

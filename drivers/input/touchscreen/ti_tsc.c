@@ -396,6 +396,39 @@ static int __devexit tscadc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int tsc_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct ti_tscadc_dev	*tscadc_dev = pdev->dev.platform_data;
+	struct tscadc		*ts_dev = tscadc_dev->tsc;
+	unsigned int idle;
+
+	if (device_may_wakeup(tscadc_dev->dev)) {
+		idle = tscadc_readl(ts_dev, TSCADC_REG_IRQENABLE);
+		tscadc_writel(ts_dev, TSCADC_REG_IRQENABLE,
+				(idle | TSCADC_IRQENB_HW_PEN));
+		tscadc_writel(ts_dev, TSCADC_REG_IRQWAKEUP,
+				TSCADC_IRQWKUP_ENB);
+	}
+	return 0;
+}
+
+static int tsc_resume(struct platform_device *pdev)
+{
+	struct ti_tscadc_dev	*tscadc_dev = pdev->dev.platform_data;
+	struct tscadc		*ts_dev = tscadc_dev->tsc;
+
+	if (device_may_wakeup(tscadc_dev->dev)) {
+		tscadc_writel(ts_dev, TSCADC_REG_IRQWAKEUP,
+				0x00);
+		tscadc_writel(ts_dev, TSCADC_REG_IRQCLR,
+				TSCADC_IRQENB_HW_PEN);
+	}
+	tsc_step_config(ts_dev);
+	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR,
+			ts_dev->steps_to_config);
+	return 0;
+}
+
 static struct platform_driver ti_tsc_driver = {
 	.probe	  = tscadc_probe,
 	.remove	 = __devexit_p(tscadc_remove),
@@ -403,6 +436,8 @@ static struct platform_driver ti_tsc_driver = {
 		.name   = "tsc",
 		.owner  = THIS_MODULE,
 	},
+	.suspend = tsc_suspend,
+	.resume = tsc_resume,
 };
 
 static int __init ti_tsc_init(void)
