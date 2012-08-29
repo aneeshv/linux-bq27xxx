@@ -945,7 +945,7 @@ int gpmc_enable_hwecc(int ecc_type, int cs, int mode,
 			bch_mod = 0;
 			bch_wrapmode = 0x06;
 		} else if (ecc_type == OMAP_ECC_BCH8_CODE_HW) {
-			eccsize1 = 0x1c; eccsize0 = 0x00;
+			eccsize1 = 0x00; eccsize0 = 0x00;
 			bch_mod = 1;
 			bch_wrapmode = 0x01;
 		} else
