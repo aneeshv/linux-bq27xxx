@@ -86,7 +86,6 @@
 #define AR8051_RGMII_TX_CLK_DLY		BIT(8)
 
 static int beaglebone_lcd_avdd_en;
-#define BEAGLEBONE_LCD_BL GPIO_TO_PIN(1, 18)
 
 #define AM33XX_CTRL_REGADDR(reg)				\
 		AM33XX_L4_WK_IO_ADDRESS(AM33XX_SCM_BASE + (reg))
@@ -140,6 +139,17 @@ static struct platform_pwm_backlight_data am335x_backlight_data2 = {
 	.pwm_period_ns  = AM335X_PWM_PERIOD_NANO_SECONDS,
 };
 
+/* Beaglebone LCD7 Backlight platform data */
+#define BB_LCD7_PWM_DEVICE_ID   "ehrpwm.1"
+
+static struct platform_pwm_backlight_data lcd7_bl_pdata = {
+	.pwm_id         = BB_LCD7_PWM_DEVICE_ID,
+	.ch             = 0,
+	.max_brightness = AM335X_BACKLIGHT_MAX_BRIGHTNESS,
+	.dft_brightness = AM335X_BACKLIGHT_DEFAULT_BRIGHTNESS,
+	.pwm_period_ns  = AM335X_PWM_PERIOD_NANO_SECONDS,
+};
+
 static struct lcd_ctrl_config lcd_cfg = {
 	&disp_panel,
 	.ac_bias		= 255,
@@ -180,23 +190,10 @@ struct da8xx_lcdc_platform_data TFC_S9700RTWV35TR_01B_pdata = {
 	.type			= "TFC_S9700RTWV35TR_01B",
 };
 
-void cape_panel_power_ctrl (int state)
-{
-	if (state)
-	{
-		gpio_direction_output(BEAGLEBONE_LCD_BL, 1);
-	}
-	else
-	{
-		gpio_direction_output(BEAGLEBONE_LCD_BL, 0);
-	}
-}
-
 struct da8xx_lcdc_platform_data TFC_S9700RTWV35TR_01B_bone_lcd_cape_pdata = {
 	.manu_name		= "ThreeFive",
 	.controller_data	= &bone_lcd_cape_cfg,
 	.type			= "TFC_S9700RTWV35TR_01B",
-	.panel_power_ctrl	= cape_panel_power_ctrl,
 };
 
 struct da8xx_lcdc_platform_data Sharp_LCD035Q3DG01_pdata = {
@@ -573,9 +570,9 @@ static struct pinmux_config haptics_pin_mux[] = {
 	{NULL, 0},
 };
 
-/* Module pin mux for LCD Cape. LCDC pinmux already being set */
+/* Module pin mux for LCD7 Cape. LCDC pinmux already being set */
 static struct pinmux_config lcd_cape_pin_mux[] = {
-	{"gpmc_a2.gpio1_18", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
+	{"gpmc_a2.ehrpwm1A", OMAP_MUX_MODE6 | AM33XX_PIN_OUTPUT},
 	{NULL, 0},
 };
 
@@ -1267,6 +1264,7 @@ static struct pinmux_config wl12xx_pin_mux_sk[] = {
 	{NULL, 0},
 };
 
+static int ehrpwm_backlight_enable;
 static bool backlight_enable;
 
 static void enable_ecap0(int evm_id, int profile)
@@ -1336,6 +1334,31 @@ static int __init backlight_init(void)
 }
 late_initcall(backlight_init);
 
+static void enable_ehrpwm1(int evm_id, int profile)
+{
+	am33xx_register_ehrpwm(1, &pwm_pdata[1]);
+	ehrpwm_backlight_enable = true;
+}
+
+/* Setup pwm-backlight for LCD7 Cape */
+static struct platform_device bone_lcd7_backlight = {
+	.name           = "pwm-backlight",
+	.id             = -1,
+	.dev            = {
+		.platform_data  = &lcd7_bl_pdata,
+	}
+};
+
+static int __init ehrpwm1_init(void)
+{
+	int status = 0;
+	if (ehrpwm_backlight_enable) {
+		platform_device_register(&bone_lcd7_backlight);
+	}
+	return status;
+}
+late_initcall(ehrpwm1_init);
+
 static int __init conf_disp_pll(int rate)
 {
 	struct clk *disp_pll;
@@ -1396,8 +1419,6 @@ static void bone_lcd7_lcdc_init(int evm_id, int profile)
 		return;
 	}
 
-	gpio_request(BEAGLEBONE_LCD_BL, "BONE_LCD_BL");
-	gpio_direction_output(BEAGLEBONE_LCD_BL, 1);
 	gpio_request(beaglebone_lcd_avdd_en, "BONE_LCD_AVDD_EN");
 	gpio_direction_output(beaglebone_lcd_avdd_en, 1);
 
@@ -2715,6 +2736,8 @@ static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
 				beaglebone_lcd_avdd_en = GPIO_TO_PIN(1, 31);
 
 			bone_lcd7_lcdc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			pr_info("BeagleBone cape: Registering PWM backlight for LCD cape\n");
+			enable_ehrpwm1(0,0);
 			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_tsc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			return;
