@@ -26,112 +26,8 @@
 #include <linux/io.h>
 #include <linux/input/ti_tsc.h>
 #include <linux/delay.h>
-#include <linux/pm_runtime.h>
+#include <linux/mfd/ti_tscadc.h>
 
-#define TSCADC_REG_RAWIRQSTATUS		0x024
-#define TSCADC_REG_IRQSTATUS		0x028
-#define TSCADC_REG_IRQENABLE		0x02C
-#define TSCADC_REG_IRQCLR		0x030
-#define TSCADC_REG_IRQWAKEUP		0x034
-#define TSCADC_REG_CTRL			0x040
-#define TSCADC_REG_ADCFSM		0x044
-#define TSCADC_REG_CLKDIV		0x04C
-#define TSCADC_REG_SE			0x054
-#define TSCADC_REG_IDLECONFIG		0x058
-#define TSCADC_REG_CHARGECONFIG		0x05C
-#define TSCADC_REG_CHARGEDELAY		0x060
-#define TSCADC_REG_STEPCONFIG(n)	(0x64 + ((n-1) * 8))
-#define TSCADC_REG_STEPDELAY(n)		(0x68 + ((n-1) * 8))
-#define TSCADC_REG_STEPCONFIG13		0x0C4
-#define TSCADC_REG_STEPDELAY13		0x0C8
-#define TSCADC_REG_STEPCONFIG14		0x0CC
-#define TSCADC_REG_STEPDELAY14		0x0D0
-#define TSCADC_REG_FIFO0CNT		0xE4
-#define TSCADC_REG_FIFO0THR		0xE8
-#define TSCADC_REG_FIFO1CNT		0xF0
-#define TSCADC_REG_FIFO1THR		0xF4
-#define TSCADC_REG_FIFO0		0x100
-#define TSCADC_REG_FIFO1		0x200
-
-/*	Register Bitfields	*/
-/* IRQ wakeup enable */
-#define TSCADC_IRQWKUP_ENB		BIT(0)
-
-/* Step Enable */
-#define TSCADC_STEPENB_MASK		(0x1FFFF << 0)
-#define TSCADC_STEPENB(val)		((val) << 0)
-#define TSCADC_STPENB_STEPENB		TSCADC_STEPENB(0x7FFF)
-
-/* IRQ enable */
-#define TSCADC_IRQENB_FIFO0THRES	BIT(2)
-#define TSCADC_IRQENB_FIFO1THRES	BIT(5)
-#define TSCADC_IRQENB_PENUP		BIT(9)
-#define TSCADC_IRQENB_HW_PEN		BIT(0)
-
-/* Step Configuration */
-#define TSCADC_STEPCONFIG_MODE_MASK	(3 << 0)
-#define TSCADC_STEPCONFIG_MODE(val)	((val) << 0)
-#define TSCADC_STEPCONFIG_MODE_HWSYNC	TSCADC_STEPCONFIG_MODE(2)
-#define TSCADC_STEPCONFIG_AVG_MASK	(7 << 2)
-#define TSCADC_STEPCONFIG_AVG(val)	((val) << 2)
-#define TSCADC_STEPCONFIG_AVG_16	TSCADC_STEPCONFIG_AVG(4)
-#define TSCADC_STEPCONFIG_XPP		BIT(5)
-#define TSCADC_STEPCONFIG_XNN		BIT(6)
-#define TSCADC_STEPCONFIG_YPP		BIT(7)
-#define TSCADC_STEPCONFIG_YNN		BIT(8)
-#define TSCADC_STEPCONFIG_XNP		BIT(9)
-#define TSCADC_STEPCONFIG_YPN		BIT(10)
-#define TSCADC_STEPCONFIG_INM_MASK	(0xF << 15)
-#define TSCADC_STEPCONFIG_INM(val)	((val) << 15)
-#define TSCADC_STEPCONFIG_INM_ADCREFM	TSCADC_STEPCONFIG_INM(8)
-#define TSCADC_STEPCONFIG_INP_MASK	(0xF << 19)
-#define TSCADC_STEPCONFIG_INP(val)	((val) << 19)
-#define TSCADC_STEPCONFIG_INP_AN2	TSCADC_STEPCONFIG_INP(2)
-#define TSCADC_STEPCONFIG_INP_AN3	TSCADC_STEPCONFIG_INP(3)
-#define TSCADC_STEPCONFIG_INP_AN4	TSCADC_STEPCONFIG_INP(4)
-#define TSCADC_STEPCONFIG_INP_ADCREFM	TSCADC_STEPCONFIG_INP(8)
-#define TSCADC_STEPCONFIG_FIFO1		BIT(26)
-
-/* Delay register */
-#define TSCADC_STEPDELAY_OPEN_MASK	(0x3FFFF << 0)
-#define TSCADC_STEPDELAY_OPEN(val)	((val) << 0)
-#define TSCADC_STEPCONFIG_OPENDLY	TSCADC_STEPDELAY_OPEN(0x098)
-#define TSCADC_STEPDELAY_SAMPLE_MASK	(0xFF << 24)
-#define TSCADC_STEPDELAY_SAMPLE(val)	((val) << 24)
-#define TSCADC_STEPCONFIG_SAMPLEDLY	TSCADC_STEPDELAY_SAMPLE(0)
-
-/* Charge Config */
-#define TSCADC_STEPCHARGE_RFP_MASK	(7 << 12)
-#define TSCADC_STEPCHARGE_RFP(val)	((val) << 12)
-#define TSCADC_STEPCHARGE_RFP_XPUL	TSCADC_STEPCHARGE_RFP(1)
-#define TSCADC_STEPCHARGE_INM_MASK	(0xF << 15)
-#define TSCADC_STEPCHARGE_INM(val)	((val) << 15)
-#define TSCADC_STEPCHARGE_INM_AN1	TSCADC_STEPCHARGE_INM(1)
-#define TSCADC_STEPCHARGE_INP_MASK	(0xF << 19)
-#define TSCADC_STEPCHARGE_INP(val)	((val) << 19)
-#define TSCADC_STEPCHARGE_INP_AN1	TSCADC_STEPCHARGE_INP(1)
-#define TSCADC_STEPCHARGE_RFM_MASK	(3 << 23)
-#define TSCADC_STEPCHARGE_RFM(val)	((val) << 23)
-#define TSCADC_STEPCHARGE_RFM_XNUR	TSCADC_STEPCHARGE_RFM(1)
-
-/* Charge delay */
-#define TSCADC_CHARGEDLY_OPEN_MASK	(0x3FFFF << 0)
-#define TSCADC_CHARGEDLY_OPEN(val)	((val) << 0)
-#define TSCADC_CHARGEDLY_OPENDLY	TSCADC_CHARGEDLY_OPEN(1)
-
-/* Control register */
-#define TSCADC_CNTRLREG_TSCSSENB	BIT(0)
-#define TSCADC_CNTRLREG_STEPID		BIT(1)
-#define TSCADC_CNTRLREG_STEPCONFIGWRT	BIT(2)
-#define TSCADC_CNTRLREG_POWERDOWN	BIT(4)
-#define TSCADC_CNTRLREG_AFE_CTRL_MASK	(3 << 5)
-#define TSCADC_CNTRLREG_AFE_CTRL(val)	((val) << 5)
-#define TSCADC_CNTRLREG_4WIRE		TSCADC_CNTRLREG_AFE_CTRL(1)
-#define TSCADC_CNTRLREG_5WIRE		TSCADC_CNTRLREG_AFE_CTRL(2)
-#define TSCADC_CNTRLREG_8WIRE		TSCADC_CNTRLREG_AFE_CTRL(3)
-#define TSCADC_CNTRLREG_TSCENB		BIT(7)
-
-#define ADC_CLK				3000000
 #define MAX_12BIT                       ((1 << 12) - 1)
 
 int pen = 1;
@@ -139,25 +35,24 @@ unsigned int bckup_x = 0, bckup_y = 0;
 
 struct tscadc {
 	struct input_dev	*input;
+	struct ti_tscadc_dev	*mfd_tscadc;
 	int			wires;
 	struct tsc_axis		x;
 	struct tsc_axis		y;
 	int			x_plate_resistance;
 	int			irq;
-	void __iomem		*tsc_base;
-	unsigned int		ctrl;
 	int			steps_to_config;
 };
 
 static unsigned int tscadc_readl(struct tscadc *ts, unsigned int reg)
 {
-	return readl(ts->tsc_base + reg);
+	return readl(ts->mfd_tscadc->tscadc_base + reg);
 }
 
 static void tscadc_writel(struct tscadc *tsc, unsigned int reg,
 					unsigned int val)
 {
-	writel(val, tsc->tsc_base + reg);
+	writel(val, tsc->mfd_tscadc->tscadc_base + reg);
 }
 
 static void tsc_step_config(struct tscadc *ts_dev)
@@ -239,18 +134,7 @@ static void tsc_step_config(struct tscadc *ts_dev)
 						stepconfigz2);
 	tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY(total_steps + 2), delay);
 
-	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
-}
-
-static void tsc_idle_config(struct tscadc *ts_config)
-{
-	/* Idle mode touch screen config */
-	unsigned int	 idleconfig;
-
-	idleconfig = TSCADC_STEPCONFIG_YNN | TSCADC_STEPCONFIG_INM_ADCREFM |
-			TSCADC_STEPCONFIG_INP_ADCREFM | TSCADC_STEPCONFIG_YPN;
-
-	tscadc_writel(ts_config, TSCADC_REG_IDLECONFIG, idleconfig);
+	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB_TC);
 }
 
 static irqreturn_t tscadc_interrupt(int irq, void *dev)
@@ -266,6 +150,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 	unsigned int		cur_diff_x = 0, cur_diff_y = 0;
 	unsigned int		val_x = 0, val_y = 0, diffx = 0, diffy = 0;
 	unsigned int		z1 = 0, z2 = 0, z = 0;
+	unsigned int		channel;
 
 	status = tscadc_readl(ts_dev, TSCADC_REG_IRQSTATUS);
 
@@ -274,39 +159,48 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 		fifo1count = tscadc_readl(ts_dev, TSCADC_REG_FIFO1CNT);
 		for (i = 0; i < (fifo0count-1); i++) {
 			readx1 = tscadc_readl(ts_dev, TSCADC_REG_FIFO0);
-			readx1 = readx1 & 0xfff;
+			channel = readx1 & 0xf0000;
+			channel = channel >> 0x10;
+			if ((channel >= 0) &&
+				(channel < ts_dev->steps_to_config)) {
+				readx1 = readx1 & 0xfff;
 
-			if (ts_dev->x.inverted)
-				readx1 = ts_dev->x.max - readx1 + ts_dev->x.min;
+				if (ts_dev->x.inverted)
+					readx1 = ts_dev->x.max - readx1 + ts_dev->x.min;
 
-			if (readx1 > prev_val_x)
-				cur_diff_x = readx1 - prev_val_x;
-			else
-				cur_diff_x = prev_val_x - readx1;
+				if (readx1 > prev_val_x)
+					cur_diff_x = readx1 - prev_val_x;
+				else
+					cur_diff_x = prev_val_x - readx1;
 
-			if (cur_diff_x < prev_diff_x) {
-				prev_diff_x = cur_diff_x;
-				val_x = readx1;
+				if (cur_diff_x < prev_diff_x) {
+					prev_diff_x = cur_diff_x;
+					val_x = readx1;
+				}
+				prev_val_x = readx1;
 			}
 
-			prev_val_x = readx1;
 			ready1 = tscadc_readl(ts_dev, TSCADC_REG_FIFO1);
-			ready1 = ready1 & 0xfff;
+			channel = ready1 & 0xf0000;
+			channel = channel >> 0x10;
+			if ((channel >= ts_dev->steps_to_config) &&
+				(channel < (2 * ts_dev->steps_to_config - 1))) {
+				ready1 &= 0xfff;
 
-			if (ts_dev->y.inverted)
-				ready1 = ts_dev->y.max - ready1 + ts_dev->y.min;
+				if (ts_dev->y.inverted)
+					ready1 = ts_dev->y.max - ready1 + ts_dev->y.min;
 
-			if (ready1 > prev_val_y)
-				cur_diff_y = ready1 - prev_val_y;
-			else
-				cur_diff_y = prev_val_y - ready1;
+				if (ready1 > prev_val_y)
+					cur_diff_y = ready1 - prev_val_y;
+				else
+					cur_diff_y = prev_val_y - ready1;
 
-			if (cur_diff_y < prev_diff_y) {
-				prev_diff_y = cur_diff_y;
-				val_y = ready1;
+				if (cur_diff_y < prev_diff_y) {
+					prev_diff_y = cur_diff_y;
+					val_y = ready1;
+				}
+				prev_val_y = ready1;
 			}
-
-			prev_val_y = ready1;
 		}
 
 		if (val_x > bckup_x) {
@@ -321,6 +215,14 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 
 		z1 = ((tscadc_readl(ts_dev, TSCADC_REG_FIFO0)) & 0xfff);
 		z2 = ((tscadc_readl(ts_dev, TSCADC_REG_FIFO1)) & 0xfff);
+
+		fifo1count = tscadc_readl(ts_dev, TSCADC_REG_FIFO1CNT);
+		for (i = 0; i < fifo1count; i++)
+			tscadc_readl(ts_dev, TSCADC_REG_FIFO1);
+
+		fifo0count = tscadc_readl(ts_dev, TSCADC_REG_FIFO0CNT);
+		for (i = 0; i < fifo0count; i++)
+			tscadc_readl(ts_dev, TSCADC_REG_FIFO0);
 
 		if ((z1 != 0) && (z2 != 0)) {
 			/*
@@ -379,7 +281,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 
 	tscadc_writel(ts_dev, TSCADC_REG_IRQSTATUS, irqclr);
 
-	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
+	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB_TC);
 	return IRQ_HANDLED;
 }
 
@@ -392,15 +294,13 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	struct tscadc			*ts_dev;
 	struct input_dev		*input_dev;
 	int				err;
-	int				clk_value;
-	int				clock_rate, irqenable, ctrl;
-	struct	tsc_data		*pdata = pdev->dev.platform_data;
-	struct resource			*res;
-	struct clk			*clk;
+	int				irqenable;
+	struct ti_tscadc_dev		*tscadc_dev = pdev->dev.platform_data;
+	struct mfd_tscadc_board		*pdata;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res) {
-		dev_err(&pdev->dev, "no memory resource defined.\n");
+	pdata = (struct mfd_tscadc_board *)tscadc_dev->dev->platform_data;
+	if (!pdata) {
+		dev_err(tscadc_dev->dev, "Could not find platform data\n");
 		return -EINVAL;
 	}
 
@@ -411,11 +311,8 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	ts_dev->irq = platform_get_irq(pdev, 0);
-	if (ts_dev->irq < 0) {
-		dev_err(&pdev->dev, "no irq ID is specified.\n");
-		return -ENODEV;
-	}
+	tscadc_dev->tsc = ts_dev;
+	ts_dev->mfd_tscadc = tscadc_dev;
 
 	input_dev = input_allocate_device();
 	if (!input_dev) {
@@ -425,78 +322,23 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	}
 	ts_dev->input = input_dev;
 
-	res =  request_mem_region(res->start, resource_size(res), pdev->name);
-	if (!res) {
-		dev_err(&pdev->dev, "failed to reserve registers.\n");
-		err = -EBUSY;
-		goto err_free_mem;
-	}
-
-	ts_dev->tsc_base = ioremap(res->start, resource_size(res));
-	if (!ts_dev->tsc_base) {
-		dev_err(&pdev->dev, "failed to map registers.\n");
-		err = -ENOMEM;
-		goto err_release_mem;
-	}
-
+	ts_dev->irq = tscadc_dev->irq;
 	err = request_irq(ts_dev->irq, tscadc_interrupt, IRQF_DISABLED,
 				pdev->dev.driver->name, ts_dev);
 	if (err) {
 		dev_err(&pdev->dev, "failed to allocate irq.\n");
-		goto err_unmap_regs;
-	}
-
-	pm_runtime_enable(&pdev->dev);
-	pm_runtime_get_sync(&pdev->dev);
-
-	clk = clk_get(&pdev->dev, "adc_tsc_fck");
-	if (IS_ERR(clk)) {
-		dev_err(&pdev->dev, "failed to get TSC fck\n");
-		err = PTR_ERR(clk);
-		goto err_free_irq;
-	}
-	clock_rate = clk_get_rate(clk);
-	clk_put(clk);
-	clk_value = clock_rate / ADC_CLK;
-	if (clk_value < 7) {
-		dev_err(&pdev->dev, "clock input less than min clock requirement\n");
-		err = -EINVAL;
 		goto err_fail;
 	}
-	/* TSCADC_CLKDIV needs to be configured to the value minus 1 */
-	clk_value = clk_value - 1;
-	tscadc_writel(ts_dev, TSCADC_REG_CLKDIV, clk_value);
 
-	ts_dev->wires = pdata->wires;
-	ts_dev->x.min = pdata->x.min;
-	ts_dev->x.max = pdata->x.max;
-	ts_dev->x.inverted = pdata->x.inverted;
-	ts_dev->y.min = pdata->y.min;
-	ts_dev->y.max = pdata->y.max;
-	ts_dev->y.inverted = pdata->y.inverted;
-	ts_dev->x_plate_resistance = pdata->x_plate_resistance;
-	ts_dev->steps_to_config = pdata->steps_to_configure;
-
-	/* Set the control register bits */
-	ctrl = TSCADC_CNTRLREG_STEPCONFIGWRT |
-			TSCADC_CNTRLREG_TSCENB |
-			TSCADC_CNTRLREG_STEPID;
-	switch (ts_dev->wires) {
-	case 4:
-		ctrl |= TSCADC_CNTRLREG_4WIRE;
-		break;
-	case 5:
-		ctrl |= TSCADC_CNTRLREG_5WIRE;
-		break;
-	case 8:
-		ctrl |= TSCADC_CNTRLREG_8WIRE;
-		break;
-	}
-	tscadc_writel(ts_dev, TSCADC_REG_CTRL, ctrl);
-	ts_dev->ctrl = ctrl;
-
-	/* Set register bits for Idel Config Mode */
-	tsc_idle_config(ts_dev);
+	ts_dev->wires = pdata->tsc_init->wires;
+	ts_dev->x_plate_resistance = pdata->tsc_init->x_plate_resistance;
+	ts_dev->steps_to_config = pdata->tsc_init->steps_to_configure;
+	ts_dev->x.min = pdata->tsc_init->x.min;
+	ts_dev->x.max = pdata->tsc_init->x.max;
+	ts_dev->x.inverted = pdata->tsc_init->x.inverted;
+	ts_dev->y.min = pdata->tsc_init->y.min;
+	ts_dev->y.max = pdata->tsc_init->y.max;
+	ts_dev->y.inverted = pdata->tsc_init->y.inverted;
 
 	/* IRQ Enable */
 	irqenable = TSCADC_IRQENB_FIFO0THRES;
@@ -506,10 +348,7 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 
 	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR, ts_dev->steps_to_config);
 
-	ctrl |= TSCADC_CNTRLREG_TSCSSENB;
-	tscadc_writel(ts_dev, TSCADC_REG_CTRL, ctrl);
-
-	input_dev->name = "ti-tsc-adcc";
+	input_dev->name = "ti-tsc";
 	input_dev->dev.parent = &pdev->dev;
 
 	input_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
@@ -528,21 +367,14 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	/* register to the input system */
 	err = input_register_device(input_dev);
 	if (err)
-		goto err_fail;
+		goto err_free_irq;
 
-	device_init_wakeup(&pdev->dev, true);
 	platform_set_drvdata(pdev, ts_dev);
 	return 0;
 
-err_fail:
-	pm_runtime_put_sync(&pdev->dev);
-	pm_runtime_disable(&pdev->dev);
 err_free_irq:
 	free_irq(ts_dev->irq, ts_dev);
-err_unmap_regs:
-	iounmap(ts_dev->tsc_base);
-err_release_mem:
-	release_mem_region(res->start, resource_size(res));
+err_fail:
 	input_free_device(ts_dev->input);
 err_free_mem:
 	platform_set_drvdata(pdev, NULL);
@@ -552,79 +384,14 @@ err_free_mem:
 
 static int __devexit tscadc_remove(struct platform_device *pdev)
 {
-	struct tscadc		*ts_dev = platform_get_drvdata(pdev);
-	struct resource		*res;
+	struct ti_tscadc_dev	*tscadc_dev = pdev->dev.platform_data;
+	struct tscadc		*ts_dev = tscadc_dev->tsc;
 
-	tscadc_writel(ts_dev, TSCADC_REG_SE, 0x00);
 	free_irq(ts_dev->irq, ts_dev);
 
 	input_unregister_device(ts_dev->input);
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	iounmap(ts_dev->tsc_base);
-	release_mem_region(res->start, resource_size(res));
-
-	pm_runtime_put_sync(&pdev->dev);
-	pm_runtime_disable(&pdev->dev);
-
 	kfree(ts_dev);
-
-	device_init_wakeup(&pdev->dev, 0);
 	platform_set_drvdata(pdev, NULL);
-	return 0;
-}
-
-static int tscadc_suspend(struct platform_device *pdev, pm_message_t state)
-{
-	struct tscadc *ts_dev = platform_get_drvdata(pdev);
-	unsigned int idle;
-
-	if (device_may_wakeup(&pdev->dev)) {
-		idle = tscadc_readl(ts_dev, TSCADC_REG_IRQENABLE);
-		tscadc_writel(ts_dev, TSCADC_REG_IRQENABLE,
-				(idle | TSCADC_IRQENB_HW_PEN));
-		tscadc_writel(ts_dev, TSCADC_REG_SE, 0x00);
-		tscadc_writel(ts_dev, TSCADC_REG_IRQWAKEUP, TSCADC_IRQWKUP_ENB);
-	} else {
-	/* module disable */
-	idle = tscadc_readl(ts_dev, TSCADC_REG_CTRL);
-	idle &= ~(TSCADC_CNTRLREG_TSCSSENB);
-	tscadc_writel(ts_dev, TSCADC_REG_CTRL, (idle |
-				TSCADC_CNTRLREG_POWERDOWN));
-	}
-
-	pm_runtime_put_sync(&pdev->dev);
-
-	return 0;
-
-}
-
-static int tscadc_resume(struct platform_device *pdev)
-{
-	struct tscadc *ts_dev = platform_get_drvdata(pdev);
-	unsigned int restore;
-
-	pm_runtime_get_sync(&pdev->dev);
-
-	if (device_may_wakeup(&pdev->dev)) {
-		restore = tscadc_readl(ts_dev, TSCADC_REG_IRQWAKEUP);
-		restore &= ~(TSCADC_IRQWKUP_ENB);
-		tscadc_writel(ts_dev, TSCADC_REG_IRQWAKEUP, restore);
-		tscadc_writel(ts_dev, TSCADC_REG_IRQCLR, TSCADC_IRQENB_HW_PEN);
-	}
-
-	/* context restore */
-	tscadc_writel(ts_dev, TSCADC_REG_CTRL, ts_dev->ctrl);
-	/* Make sure ADC is powered up */
-	restore = tscadc_readl(ts_dev, TSCADC_REG_CTRL);
-	restore &= ~(TSCADC_CNTRLREG_POWERDOWN);
-	tscadc_writel(ts_dev, TSCADC_REG_CTRL, restore);
-	tsc_idle_config(ts_dev);
-	tsc_step_config(ts_dev);
-	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR, ts_dev->steps_to_config);
-	restore = tscadc_readl(ts_dev, TSCADC_REG_CTRL);
-	tscadc_writel(ts_dev, TSCADC_REG_CTRL,
-			(restore | TSCADC_CNTRLREG_TSCSSENB));
 
 	return 0;
 }
@@ -636,8 +403,6 @@ static struct platform_driver ti_tsc_driver = {
 		.name   = "tsc",
 		.owner  = THIS_MODULE,
 	},
-	.suspend = tscadc_suspend,
-	.resume  = tscadc_resume,
 };
 
 static int __init ti_tsc_init(void)
