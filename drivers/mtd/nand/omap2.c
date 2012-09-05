@@ -1276,6 +1276,17 @@ static int __devinit omap_nand_probe(struct platform_device *pdev)
 		goto out_release_mem_region;
 	}
 
+	/* Fix sub page size to page size for HW ECC */
+	if (info->nand.ecc.mode == NAND_ECC_HW) {
+		/*
+		 * For HW ECC, subpage size set to page size
+		 * as subpage operations not supporting.
+		 */
+		info->mtd.subpage_sft = 0;
+		info->nand.subpagesize = info->mtd.writesize >>
+			info->mtd.subpage_sft;
+	}
+
 	mtd_device_parse_register(&info->mtd, NULL, 0,
 			pdata->parts, pdata->nr_parts);
 
