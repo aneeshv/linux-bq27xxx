@@ -300,7 +300,7 @@ static struct da8xx_panel known_lcd_panels[] = {
 		.pxl_clk = 9000000,
 		.invert_pxl_clk = 0,
 	},
-	[4] = {
+	[5] = {
 		 /* CDTech S035Q01 */
 		.name = "CDTech_S035Q01",
 		.width = 320,
