@@ -1007,14 +1007,14 @@ int map_xbar_event_to_channel(unsigned int event, unsigned int *channel,
 		/* confirm the range */
 		if (*channel < EDMA_MAX_DMACH)
 			clear_bit(*channel, edma_cc[ctrl]->edma_unused);
-		mask = (*channel)%4;
 		offset = (*channel)/4;
 		offset *= 4;
-		offset += mask;
 		val = (unsigned int)__raw_readl(AM33XX_CTRL_REGADDR(
 					AM33XX_SCM_BASE_EDMA + offset));
-		val = val & (~(0xFF));
-		val = val | (xbar_event_mapping[xbar_evt_no].xbar_event_no);
+		mask = *channel & 0x3;
+		mask <<= 3;
+		val &= ~(0xFF << mask);
+		val |= xbar_event_mapping[xbar_evt_no].xbar_event_no << mask;
 		__raw_writel(val,
 			AM33XX_CTRL_REGADDR(AM33XX_SCM_BASE_EDMA + offset));
 		return 0;
