@@ -204,6 +204,9 @@ struct omap_gpio_platform_data {
 
 	struct omap_gpio_reg_offs *regs;
 	bool loses_context;	/* whether the bank would ever lose context */
+
+	/* Return context loss count due to PM states changing */
+	int (*get_context_loss_count)(struct device *dev);
 };
 
 /* TODO: Analyze removing gpio_bank_count usage from driver code */

@@ -56,8 +56,10 @@ struct gpio_bank {
 	bool loses_context;
 	int stride;
 	u32 width;
+	int context_loss_count;
 
 	void (*set_dataout)(struct gpio_bank *bank, int gpio, int enable);
+	int (*get_context_loss_count)(struct device *dev);
 
 	struct omap_gpio_reg_offs *regs;
 };
@@ -1198,6 +1200,7 @@ static int __devinit omap_gpio_probe(struct platform_device *pdev)
 	bank->stride = pdata->bank_stride;
 	bank->width = pdata->bank_width;
 	bank->loses_context = pdata->loses_context;
+	bank->get_context_loss_count = pdata->get_context_loss_count;
 	bank->regs = pdata->regs;
 
 	if (bank->regs->set_dataout && bank->regs->clr_dataout)
@@ -1234,6 +1237,8 @@ static int __devinit omap_gpio_probe(struct platform_device *pdev)
 }
 
 #if defined(CONFIG_ARCH_OMAP16XX) || defined(CONFIG_ARCH_OMAP2PLUS)
+static void omap_gpio_save_context_per_bank(int bank_id);
+static void omap_gpio_restore_context_per_bank(int bank_id);
 static int omap_gpio_suspend(void)
 {
 	int i;
@@ -1279,6 +1284,12 @@ static int omap_gpio_suspend(void)
 		__raw_writel(0xffffffff, wake_clear);
 		__raw_writel(bank->suspend_wakeup, wake_set);
 		spin_unlock_irqrestore(&bank->lock, flags);
+
+		if (bank->get_context_loss_count)
+			bank->context_loss_count =
+				bank->get_context_loss_count(bank->dev);
+
+		omap_gpio_save_context_per_bank(i);
 	}
 
 	return 0;
@@ -1293,6 +1304,7 @@ static void omap_gpio_resume(void)
 
 	for (i = 0; i < gpio_bank_count; i++) {
 		struct gpio_bank *bank = &gpio_bank[i];
+		int context_lost_cnt_after;
 		void __iomem *wake_clear;
 		void __iomem *wake_set;
 		unsigned long flags;
@@ -1324,6 +1336,14 @@ static void omap_gpio_resume(void)
 		__raw_writel(0xffffffff, wake_clear);
 		__raw_writel(bank->saved_wakeup, wake_set);
 		spin_unlock_irqrestore(&bank->lock, flags);
+
+		if (bank->get_context_loss_count) {
+			context_lost_cnt_after =
+				bank->get_context_loss_count(bank->dev);
+			if (context_lost_cnt_after != bank->context_loss_count
+				|| !context_lost_cnt_after)
+				omap_gpio_restore_context_per_bank(i);
+		}
 	}
 }
 
@@ -1571,6 +1591,66 @@ void omap_gpio_restore_context(void)
 				bank->base + OMAP24XX_GPIO_DATAOUT);
 	}
 }
+
+static void omap_gpio_save_context_per_bank(int bank_id)
+{
+	struct gpio_bank *bank = &gpio_bank[bank_id];
+
+	if (!cpu_is_am33xx())
+		return;
+
+	gpio_context[bank_id].irqenable1 = __raw_readl(bank->base +
+				OMAP4_GPIO_IRQSTATUSSET0);
+	gpio_context[bank_id].irqenable2 = __raw_readl(bank->base +
+				OMAP4_GPIO_IRQSTATUSSET1);
+	gpio_context[bank_id].wake_en = __raw_readl(bank->base +
+				OMAP4_GPIO_IRQWAKEN0);
+	gpio_context[bank_id].ctrl = __raw_readl(bank->base +
+				OMAP4_GPIO_CTRL);
+	gpio_context[bank_id].oe = __raw_readl(bank->base +
+				OMAP4_GPIO_OE);
+	gpio_context[bank_id].leveldetect0 = __raw_readl(bank->base +
+				OMAP4_GPIO_LEVELDETECT0);
+	gpio_context[bank_id].leveldetect1 = __raw_readl(bank->base +
+				OMAP4_GPIO_LEVELDETECT1);
+	gpio_context[bank_id].risingdetect = __raw_readl(bank->base +
+				OMAP4_GPIO_RISINGDETECT);
+	gpio_context[bank_id].fallingdetect = __raw_readl(bank->base +
+				OMAP4_GPIO_FALLINGDETECT);
+	gpio_context[bank_id].dataout = __raw_readl(bank->base +
+				OMAP4_GPIO_DATAOUT);
+
+}
+
+static void omap_gpio_restore_context_per_bank(int bank_id)
+{
+	struct gpio_bank *bank = &gpio_bank[bank_id];
+
+	if (!cpu_is_am33xx())
+		return;
+
+	__raw_writel(gpio_context[bank_id].irqenable1,
+			bank->base + OMAP4_GPIO_IRQSTATUSSET0);
+	__raw_writel(gpio_context[bank_id].irqenable2,
+			bank->base + OMAP4_GPIO_IRQSTATUSSET1);
+	__raw_writel(gpio_context[bank_id].wake_en,
+			bank->base + OMAP4_GPIO_IRQWAKEN0);
+	__raw_writel(gpio_context[bank_id].ctrl,
+			bank->base + OMAP4_GPIO_CTRL);
+	__raw_writel(gpio_context[bank_id].leveldetect0,
+			bank->base + OMAP4_GPIO_LEVELDETECT0);
+	__raw_writel(gpio_context[bank_id].leveldetect1,
+			bank->base + OMAP4_GPIO_LEVELDETECT1);
+	__raw_writel(gpio_context[bank_id].risingdetect,
+			bank->base + OMAP4_GPIO_RISINGDETECT);
+	__raw_writel(gpio_context[bank_id].fallingdetect,
+			bank->base + OMAP4_GPIO_FALLINGDETECT);
+	__raw_writel(gpio_context[bank_id].dataout,
+			bank->base + OMAP4_GPIO_DATAOUT);
+	__raw_writel(gpio_context[bank_id].oe,
+			bank->base + OMAP4_GPIO_OE);
+}
+
 #endif
 
 static struct platform_driver omap_gpio_driver = {
