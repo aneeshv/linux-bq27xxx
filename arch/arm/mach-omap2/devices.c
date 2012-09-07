@@ -1198,13 +1198,13 @@ arch_initcall(omap2_init_devices);
 /* TODO : Verify the offsets */
 static struct cpsw_slave_data am33xx_cpsw_slaves[] = {
 	{
-		.slave_reg_ofs  = 0x208,
+		.slave_reg_ofs  = 0x200,
 		.sliver_reg_ofs = 0xd80,
 		.phy_id		= "0:00",
 		.dual_emac_reserved_vlan = CPSW_PORT_VLAN_SLAVE_0,
 	},
 	{
-		.slave_reg_ofs  = 0x308,
+		.slave_reg_ofs  = 0x300,
 		.sliver_reg_ofs = 0xdc0,
 		.phy_id		= "0:01",
 		.dual_emac_reserved_vlan = CPSW_PORT_VLAN_SLAVE_1,
