@@ -339,6 +339,28 @@ struct cpsw_priv {
 
 #ifdef CONFIG_TI_CPSW_DUAL_EMAC
 
+static void cpsw_ndo_set_rx_mode(struct net_device *ndev)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+	struct cpsw_slave *slave = priv->slaves + priv->emac_port;
+
+	/* Clear all mcast from ALE */
+	cpsw_ale_flush_vlan_multicast(priv->ale, slave->port_vlan,
+			1 << (priv->emac_port + 1) | 1 << priv->host_port);
+
+	if (!netdev_mc_empty(ndev)) {
+		struct netdev_hw_addr *ha;
+
+		/* program multicast address list into ALE register */
+		netdev_for_each_mc_addr(ha, ndev) {
+			cpsw_ale_vlan_add_mcast(priv->ale, (u8 *)ha->addr,
+					1 << (priv->emac_port + 1) |
+					1 << priv->host_port,
+					slave->port_vlan, 0, 0);
+		}
+	}
+}
+
 static inline void cpsw_p0_fifo_type_select(struct cpsw_priv *priv)
 {
 	u32 reg;
@@ -394,6 +416,24 @@ static inline int cpsw_tx_packet_submit(struct net_device *ndev,
 #define cpsw_add_switch_mode_default_ale_entries(priv)
 
 #else	/* CONFIG_TI_CPSW_DUAL_EMAC */
+
+static void cpsw_ndo_set_rx_mode(struct net_device *ndev)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+
+	/* Clear all mcast from ALE */
+	cpsw_ale_flush_multicast(priv->ale, ALE_ALL_PORTS << priv->host_port);
+
+	if (!netdev_mc_empty(ndev)) {
+		struct netdev_hw_addr *ha;
+
+		/* program multicast address list into ALE register */
+		netdev_for_each_mc_addr(ha, ndev) {
+			cpsw_ale_add_mcast(priv->ale, (u8 *)ha->addr,
+				ALE_ALL_PORTS << priv->host_port, 0, 0);
+		}
+	}
+}
 
 #define cpsw_p0_fifo_type_select(priv)
 #define cpsw_add_dual_emac_mode_default_ale_entries(priv, slave, slave_port)
@@ -1977,6 +2017,7 @@ static const struct net_device_ops cpsw_netdev_ops = {
 	.ndo_validate_addr	= eth_validate_addr,
 	.ndo_tx_timeout		= cpsw_ndo_tx_timeout,
 	.ndo_get_stats		= cpsw_ndo_get_stats,
+	.ndo_set_rx_mode	= cpsw_ndo_set_rx_mode,
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	.ndo_poll_controller	= cpsw_ndo_poll_controller,
 #endif
