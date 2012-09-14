@@ -1631,6 +1631,13 @@ static void usb_process_rx_queue(struct cppi41 *cppi, unsigned index)
 		if (length == 0)
 			ERR("!Race condtion: rxBD read before updated by dma");
 
+		/* the cppi41 dma will set received byte length as 1 when
+		 * zero length packet is received, fix this dummy byte by
+		 * setting acutal length received as zero 
+		 */
+		if (curr_pd->hw_desc.pkt_info & CPPI41_ZLP)
+			length = 0;
+
 		/* Extract the data from received packet descriptor */
 		ch_num = curr_pd->ch_num;
 		ep_num = curr_pd->ep_num;
