@@ -1320,6 +1320,7 @@ static int __init backlight_init(void)
 
 		switch (am335x_evm_get_id()) {
 		case GEN_PURP_EVM:
+		case GEN_PURP_DDR3_EVM:
 			ecap_index = 0;
 			break;
 		case EVM_SK:
@@ -1400,6 +1401,7 @@ static void lcdc_init(int evm_id, int profile)
 	}
 	switch (evm_id) {
 	case GEN_PURP_EVM:
+	case GEN_PURP_DDR3_EVM:
 		lcdc_pdata = &TFC_S9700RTWV35TR_01B_pdata;
 		break;
 	case EVM_SK:
@@ -1988,6 +1990,7 @@ static void lis331dlh_init(int evm_id, int profile)
 
 	switch (evm_id) {
 	case GEN_PURP_EVM:
+	case GEN_PURP_DDR3_EVM:
 		i2c_instance = 2;
 		break;
 	case EVM_SK:
@@ -2286,6 +2289,7 @@ static void d_can_init(int evm_id, int profile)
 		}
 		break;
 	case GEN_PURP_EVM:
+	case GEN_PURP_DDR3_EVM:
 		if (profile == PROFILE_1) {
 			setup_pin_mux(d_can_gp_pin_mux);
 			/* Instance One */
@@ -2608,9 +2612,16 @@ static int am33xx_evm_tx_clk_dly_phy_fixup(struct phy_device *phydev)
 static void setup_general_purpose_evm(void)
 {
 	u32 prof_sel = am335x_get_profile_selection();
-	pr_info("The board is general purpose EVM in profile %d\n", prof_sel);
+	u32 boardid = GEN_PURP_EVM;
 
-	_configure_device(GEN_PURP_EVM, gen_purp_evm_dev_cfg, (1L << prof_sel));
+	if (!strncmp("1.5A", config.version, 4))
+		boardid = GEN_PURP_DDR3_EVM;
+
+	pr_info("The board is general purpose EVM %sin profile %d\n",
+			((boardid == GEN_PURP_DDR3_EVM) ? "with DDR3 " : ""),
+			prof_sel);
+
+	_configure_device(boardid, gen_purp_evm_dev_cfg, (1L << prof_sel));
 
 	am33xx_cpsw_init(AM33XX_CPSW_MODE_RGMII, NULL, NULL);
 	/* Atheros Tx Clk delay Phy fixup */
