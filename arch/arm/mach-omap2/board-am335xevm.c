@@ -685,16 +685,6 @@ static struct pinmux_config dvi_pin_mux[] = {
 	{NULL, 0},
 };
 
-static struct pinmux_config tscadc_pin_mux[] = {
-	{"ain0.ain0",           OMAP_MUX_MODE0 | AM33XX_INPUT_EN},
-	{"ain1.ain1",           OMAP_MUX_MODE0 | AM33XX_INPUT_EN},
-	{"ain2.ain2",           OMAP_MUX_MODE0 | AM33XX_INPUT_EN},
-	{"ain3.ain3",           OMAP_MUX_MODE0 | AM33XX_INPUT_EN},
-	{"vrefp.vrefp",         OMAP_MUX_MODE0 | AM33XX_INPUT_EN},
-	{"vrefn.vrefn",         OMAP_MUX_MODE0 | AM33XX_INPUT_EN},
-	{NULL, 0},
-};
-
 /* Pin mux for nand flash module */
 static struct pinmux_config nand_pin_mux[] = {
 	{"gpmc_ad0.gpmc_ad0",	  OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
@@ -1500,7 +1490,6 @@ static void mfd_tscadc_init(int evm_id, int profile)
 {
 	int err;
 
-	setup_pin_mux(tscadc_pin_mux);
 	err = am33xx_register_mfd_tscadc(&tscadc);
 	if (err)
 		pr_err("failed to register touchscreen device\n");
@@ -1511,7 +1500,6 @@ static void lcd_cape_tsc_init(int evm_id, int profile)
 	int err;
 
 	pr_info("IN : %s \n", __FUNCTION__);
-	setup_pin_mux(tscadc_pin_mux);
 	err = am33xx_register_mfd_tscadc(&beaglebone_tscadc);
 	if (err)
 		pr_err("failed to register touchscreen device\n");
