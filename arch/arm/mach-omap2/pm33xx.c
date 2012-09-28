@@ -116,16 +116,23 @@ static int am33xx_pm_suspend(void)
 {
 	int state, ret = 0;
 
-	struct omap_hwmod *gpmc_oh, *usb_oh;
+	struct omap_hwmod *gpmc_oh, *usb_oh, *gpio1_oh;
 
 	usb_oh		= omap_hwmod_lookup("usb_otg_hs");
 	gpmc_oh		= omap_hwmod_lookup("gpmc");
+	gpio1_oh	= omap_hwmod_lookup("gpio1");	/* WKUP domain GPIO */
 
 	omap_hwmod_enable(usb_oh);
 	omap_hwmod_enable(gpmc_oh);
 
 	omap_hwmod_idle(usb_oh);
 	omap_hwmod_idle(gpmc_oh);
+
+	/*
+	 * Disable the GPIO module. This ensure that
+	 * only sWAKEUP interrupts to Cortex-M3 get generated
+	 */
+	omap_hwmod_idle(gpio1_oh);
 
 	if (gfx_l3_clkdm && gfx_l4ls_clkdm) {
 		clkdm_sleep(gfx_l3_clkdm);
@@ -161,6 +168,12 @@ static int am33xx_pm_suspend(void)
 	}
 
 	ret = am33xx_verify_lp_state(ret);
+
+	/*
+	 * Enable the GPIO module. Once the driver is
+	 * fully adapted to runtime PM this will go away
+	 */
+	omap_hwmod_enable(gpio1_oh);
 
 	return ret;
 }
