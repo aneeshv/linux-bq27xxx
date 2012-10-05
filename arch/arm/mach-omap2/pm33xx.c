@@ -189,8 +189,18 @@ static int am33xx_pm_enter(suspend_state_t unused)
 static int am33xx_pm_begin(suspend_state_t state)
 {
 	int ret = 0;
+	int state_id = 0;
 
 	disable_hlt();
+
+	switch (state) {
+	case PM_SUSPEND_STANDBY:
+		state_id = 0xb;
+		break;
+	case PM_SUSPEND_MEM:
+		state_id = 0x3;
+		break;
+	}
 
 	/*
 	 * Populate the resume address as part of IPC data
@@ -199,7 +209,7 @@ static int am33xx_pm_begin(suspend_state_t state)
 	 * the word *after* the word which holds the resume offset
 	 */
 	am33xx_lp_ipc.resume_addr = (DS_RESUME_BASE + am33xx_resume_offset + 4);
-	am33xx_lp_ipc.sleep_mode  = DS_MODE;
+	am33xx_lp_ipc.sleep_mode  = state_id;
 	am33xx_lp_ipc.ipc_data1	  = DS_IPC_DEFAULT;
 	am33xx_lp_ipc.ipc_data2   = DS_IPC_DEFAULT;
 
@@ -267,11 +277,22 @@ static void am33xx_pm_end(void)
 	return;
 }
 
+static int am33xx_pm_valid(suspend_state_t state)
+{
+	switch (state) {
+	case PM_SUSPEND_STANDBY:
+	case PM_SUSPEND_MEM:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 static const struct platform_suspend_ops am33xx_pm_ops = {
 	.begin		= am33xx_pm_begin,
 	.end		= am33xx_pm_end,
 	.enter		= am33xx_pm_enter,
-	.valid		= suspend_valid_only_mem,
+	.valid		= am33xx_pm_valid,
 	.prepare	= am33xx_pm_prepare_late,
 	.finish		= am33xx_pm_finish,
 };
