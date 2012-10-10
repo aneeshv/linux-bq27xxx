@@ -1313,7 +1313,10 @@ static int ehrpwm_pwm_request(struct pwm_device *p)
 
 	p->tick_hz = clk_get_rate(ehrpwm->clk);
 	debug("\n The clk freq is %lu", p->tick_hz);
-	ehrpwm_pwm_stop(p);
+	/* Put PWM output to low */
+	pm_runtime_get_sync(ehrpwm->dev);
+	ehrpwm_channel_output_low(p);
+	pm_runtime_put_sync(ehrpwm->dev);
 
 	return 0;
 }
