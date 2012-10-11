@@ -168,6 +168,17 @@ static int __devinit tps65217_probe(struct i2c_client *client,
 		goto err_regmap;
 	}
 
+	/* Set the PMIC to shutdown on PWR_EN toggle */
+	if (pdata->status_off) {
+		ret = tps65217_set_bits(tps, TPS65217_REG_STATUS,
+				TPS65217_STATUS_OFF, TPS65217_STATUS_OFF,
+				TPS65217_PROTECT_NONE);
+		if (ret) {
+			dev_err(tps->dev, "Failed to set the status OFF\n");
+			goto err_regmap;
+		}
+	}
+
 	dev_info(tps->dev, "TPS65217 ID %#x version 1.%d\n",
 			(version & TPS65217_CHIPID_CHIP_MASK) >> 4,
 			version & TPS65217_CHIPID_REV_MASK);

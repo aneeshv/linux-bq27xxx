@@ -234,6 +234,7 @@ struct tps65217_bl_pdata {
 /**
  * struct tps65217_board - packages regulator init data
  * @tps65217_regulator_data: regulator initialization values
+ * @status_off: Set the PMIC to shutdown on PWR_EN toggle
  *
  * Board data may be used to initialize regulator.
  */
@@ -241,6 +242,7 @@ struct tps65217_board {
 	struct regulator_init_data *tps65217_init_data;
 	struct device_node *of_node[TPS65217_NUM_SUBDEVS];
 	struct tps65217_bl_pdata *bl_pdata;
+	bool status_off;
 };
 
 struct tps65217_rdelay {
