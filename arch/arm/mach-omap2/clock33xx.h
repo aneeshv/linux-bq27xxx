@@ -29,6 +29,11 @@ int am33xx_clk_init(void);
      crash upon accessing timer 3 & 6 registers in probe.
      Fix by setting parent of both these timers to master
      oscillator clock.
+   WDT1: On reset, RC Osc 32K clock is sourced to WDT1 module,
+     which is non-accurate clock-source and results into inaccuracy
+     with timer ticking.
+     The solution is to switch the input functional clock-source to
+     per_32k clock.
  */
 static inline void am33xx_init_timer_parent(struct clk *clk)
 {
