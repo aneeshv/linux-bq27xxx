@@ -34,6 +34,7 @@
 #include "cm33xx.h"
 #include "prm33xx.h"
 #include "common.h"
+#include "wd_timer.h"
 
 /* Backward references (IPs with Bus Master capability) */
 static struct omap_hwmod am33xx_mpu_hwmod;
@@ -3212,8 +3213,21 @@ static struct omap_hwmod am33xx_uart6_hwmod = {
 };
 
 /* 'wd_timer' class */
+static struct omap_hwmod_class_sysconfig wdt_sysc = {
+	.rev_offs	= 0x0,
+	.sysc_offs	= 0x10,
+	.syss_offs	= 0x14,
+	.sysc_flags	= (SYSC_HAS_EMUFREE | SYSC_HAS_SIDLEMODE |
+			SYSC_HAS_SOFTRESET | SYSS_HAS_RESET_STATUS),
+	.idlemodes	= (SIDLE_FORCE | SIDLE_NO | SIDLE_SMART |
+			SIDLE_SMART_WKUP),
+	.sysc_fields	= &omap_hwmod_sysc_type1,
+};
+
 static struct omap_hwmod_class am33xx_wd_timer_hwmod_class = {
 	.name		= "wd_timer",
+	.sysc		= &wdt_sysc,
+	.pre_shutdown	= &omap2_wd_timer_disable,
 };
 
 static struct omap_hwmod_addr_space am33xx_wd_timer1_addrs[] = {
@@ -3245,6 +3259,7 @@ static struct omap_hwmod am33xx_wd_timer1_hwmod = {
 	.name		= "wd_timer2",
 	.class		= &am33xx_wd_timer_hwmod_class,
 	.clkdm_name	= "l4_wkup_clkdm",
+	.flags		= HWMOD_SWSUP_SIDLE,
 	.main_clk	= "wdt1_fck",
 	.prcm		= {
 		.omap4	= {
