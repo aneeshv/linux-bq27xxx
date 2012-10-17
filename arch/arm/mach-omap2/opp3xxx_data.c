@@ -167,7 +167,7 @@ static struct omap_opp_def __initdata omap36xx_opp_def_list[] = {
 #define AM33XX_VDD_MPU_OPP120_UV	1200000
 #define AM33XX_VDD_MPU_OPPTURBO_UV	1260000
 
-static struct omap_opp_def __initdata am33xx_opp_def_list[] = {
+static struct omap_opp_def __initdata am33xx_es1_0_opp_def_list[] = {
 	/* MPU OPP1 - OPP50 */
 	OPP_INITIALIZER("mpu", true,  275000000, AM33XX_VDD_MPU_OPP50_UV),
 	/* MPU OPP2 - OPP100 */
@@ -176,6 +176,25 @@ static struct omap_opp_def __initdata am33xx_opp_def_list[] = {
 	OPP_INITIALIZER("mpu", true,  600000000, AM33XX_VDD_MPU_OPP120_UV),
 	/* MPU OPP4 - OPPTurbo */
 	OPP_INITIALIZER("mpu", true,  720000000, AM33XX_VDD_MPU_OPPTURBO_UV),
+};
+
+#define AM33XX_ES2_0_VDD_MPU_OPP50_UV		950000
+#define AM33XX_ES2_0_VDD_MPU_OPP100_UV		1100000
+#define AM33XX_ES2_0_VDD_MPU_OPPTURBO_UV	1260000
+#define AM33XX_ES2_0_VDD_MPU_OPPNITRO_UV	1320000
+
+static struct omap_opp_def __initdata am33xx_es2_0_opp_def_list[] = {
+	/* MPU OPP1 - OPP50 */
+	OPP_INITIALIZER("mpu", true,  300000000, AM33XX_ES2_0_VDD_MPU_OPP50_UV),
+	/* MPU OPP2 - OPP100 */
+	OPP_INITIALIZER("mpu", true,  600000000,
+				AM33XX_ES2_0_VDD_MPU_OPP100_UV),
+	/* MPU OPP3 - OPPTurbo */
+	OPP_INITIALIZER("mpu", false, 800000000,
+				AM33XX_ES2_0_VDD_MPU_OPPTURBO_UV),
+	/* MPU OPP4 - OPPNitro */
+	OPP_INITIALIZER("mpu", false, 1000000000,
+				AM33XX_ES2_0_VDD_MPU_OPPNITRO_UV),
 };
 
 /**
@@ -191,9 +210,14 @@ int __init omap3_opp_init(void)
 	if (cpu_is_omap3630())
 		r = omap_init_opp_table(omap36xx_opp_def_list,
 			ARRAY_SIZE(omap36xx_opp_def_list));
-	else if (cpu_is_am33xx())
-		r = omap_init_opp_table(am33xx_opp_def_list,
-			ARRAY_SIZE(am33xx_opp_def_list));
+	else if (cpu_is_am33xx()) {
+		if (omap_rev() == AM335X_REV_ES1_0)
+			r = omap_init_opp_table(am33xx_es1_0_opp_def_list,
+				ARRAY_SIZE(am33xx_es1_0_opp_def_list));
+		else
+			r = omap_init_opp_table(am33xx_es2_0_opp_def_list,
+				ARRAY_SIZE(am33xx_es2_0_opp_def_list));
+	}
 	else
 		r = omap_init_opp_table(omap34xx_opp_def_list,
 			ARRAY_SIZE(omap34xx_opp_def_list));
