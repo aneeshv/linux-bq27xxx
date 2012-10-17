@@ -2227,6 +2227,7 @@ struct tps65217_bl_pdata bone_lcd3_bl_pdata[] = {
 static struct tps65217_board beaglebone_tps65217_info = {
 	.tps65217_init_data = &tps65217_regulator_data[0],
 	.bl_pdata = bone_lcd3_bl_pdata,
+	.status_off = true,
 };
 
 static struct lis3lv02d_platform_data lis331dlh_pdata = {
