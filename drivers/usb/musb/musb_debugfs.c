@@ -223,6 +223,7 @@ static ssize_t musb_test_mode_write(struct file *file,
 		test = MUSB_TEST_SE0_NAK;
 
 	musb_writeb(musb->mregs, MUSB_TESTMODE, test);
+	pr_info("%smusb%d: test-mode value %x\n", buf, musb->id, test);
 
 	return count;
 }
@@ -241,7 +242,7 @@ int __devinit musb_init_debugfs(struct musb *musb)
 	struct dentry		*file;
 	int			ret;
 
-	root = debugfs_create_dir("musb", NULL);
+	root = debugfs_create_dir(dev_name(musb->controller), NULL);
 	if (IS_ERR(root)) {
 		ret = PTR_ERR(root);
 		goto err0;
