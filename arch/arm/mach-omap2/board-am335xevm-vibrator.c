@@ -134,7 +134,7 @@ static int __init vibrator_init(void)
     return 0;
 }
 
-static int __init am335xevm_vibrator_init(void)
+int __init am335xevm_vibrator_init(void)
 {
     int ret;
 
@@ -144,9 +144,7 @@ static int __init am335xevm_vibrator_init(void)
 
     vibdata.gpio_en = VIBRATOR_GPIO;
 
-    omap_mux_init_gpio(vibdata.gpio_en, OMAP_PIN_OUTPUT |
-                                            OMAP_PIN_OFF_OUTPUT_LOW);
-    omap_mux_init_signal("gpmc_a4.gpio1_20", OMAP_PIN_OUTPUT);
+    omap_mux_init_signal("gpmc_a4.gpio1_20", OMAP_MUX_MODE7 | OMAP_PIN_OUTPUT);
 
     ret = gpio_request(vibdata.gpio_en, "vibrator-en");
     if (ret) {
@@ -161,5 +159,4 @@ static int __init am335xevm_vibrator_init(void)
 
     return ret;
 }
-
-late_initcall(am335xevm_vibrator_init);
+EXPORT_SYMBOL(am335xevm_vibrator_init);

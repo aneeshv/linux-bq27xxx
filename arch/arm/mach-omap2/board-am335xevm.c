@@ -2597,6 +2597,8 @@ static int am33xx_evm_tx_clk_dly_phy_fixup(struct phy_device *phydev)
 	return 0;
 }
 
+int am335xevm_vibrator_init(void);
+
 static void setup_general_purpose_evm(void)
 {
 	u32 prof_sel = am335x_get_profile_selection();
@@ -2615,6 +2617,9 @@ static void setup_general_purpose_evm(void)
 	/* Atheros Tx Clk delay Phy fixup */
 	phy_register_fixup_for_uid(AM335X_EVM_PHY_ID, AM335X_EVM_PHY_MASK,
 				   am33xx_evm_tx_clk_dly_phy_fixup);
+
+	/* Initialize Vibrator on AM335xEVM */
+	am335xevm_vibrator_init();
 }
 
 static void setup_ind_auto_motor_ctrl_evm(void)
