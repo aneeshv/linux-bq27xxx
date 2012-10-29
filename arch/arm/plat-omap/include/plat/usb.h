@@ -277,6 +277,7 @@ static inline void omap2_usbfs_init(struct omap_usb_config *pdata)
 #define USBSTAT0	0x624
 #define USBCTRL1	0x628
 #define USBSTAT1	0x62c
+#define USBWKUPCTRL	0x648
 
 /* TI816X PHY controls bits */
 #define TI816X_USBPHY0_NORMAL_MODE	(1 << 0)
@@ -311,6 +312,11 @@ static inline void omap2_usbfs_init(struct omap_usb_config *pdata)
 /* AM335X only PHY bits */
 #define AM335X_USBPHY_GPIO_SIG_INV     (1 << 13)
 #define AM335X_USBPHY_GPIO_SIG_CROSS   (1 << 14)
+
+/*AM335X USB wakeup control bits */
+#define AM33XX_USB_WKUP_CTRL_ENABLE    ((1 << 8) | (1 << 0))
+#define AM33XX_USB_WKUP_CTRL_DISABLE   0x0
+
 
 #if defined(CONFIG_ARCH_OMAP1) && defined(CONFIG_USB)
 u32 omap1_usb0_init(unsigned nwires, unsigned is_device);
