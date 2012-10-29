@@ -105,6 +105,75 @@ do {								\
 #define CPSW_RX_TIMER_REQ	5
 #define CPSW_TX_TIMER_REQ	6
 
+/* CPSW_PORT_V1 */
+#define CPSW1_MAX_BLKS      0x00 /* Maximum FIFO Blocks */
+#define CPSW1_BLK_CNT       0x04 /* FIFO Block Usage Count (Read Only) */
+#define CPSW1_TX_IN_CTL     0x08 /* Transmit FIFO Control */
+#define CPSW1_PORT_VLAN     0x0c /* VLAN Register */
+#define CPSW1_TX_PRI_MAP    0x10 /* Tx Header Priority to Switch Pri Mapping */
+#define CPSW1_TS_CTL        0x14 /* Time Sync Control */
+#define CPSW1_TS_SEQ_LTYPE  0x18 /* Time Sync Sequence ID Offset and Msg Type */
+#define CPSW1_TS_VLAN       0x1c /* Time Sync VLAN1 and VLAN2 */
+
+/* CPSW_PORT_V2 */
+#define CPSW2_CONTROL       0x00 /* Control Register */
+#define CPSW2_MAX_BLKS      0x08 /* Maximum FIFO Blocks */
+#define CPSW2_BLK_CNT       0x0c /* FIFO Block Usage Count (Read Only) */
+#define CPSW2_TX_IN_CTL     0x10 /* Transmit FIFO Control */
+#define CPSW2_PORT_VLAN     0x14 /* VLAN Register */
+#define CPSW2_TX_PRI_MAP    0x18 /* Tx Header Priority to Switch Pri Mapping */
+#define CPSW2_TS_SEQ_MTYPE  0x1c /* Time Sync Sequence ID Offset and Msg Type */
+
+/* CPSW_PORT_V1 and V2 */
+#define SA_LO               0x20 /* CPGMAC_SL Source Address Low */
+#define SA_HI               0x24 /* CPGMAC_SL Source Address High */
+#define SEND_PERCENT        0x28 /* Transmit Queue Send Percentages */
+
+/* CPSW_PORT_V2 only */
+#define RX_DSCP_PRI_MAP0    0x30 /* Rx DSCP Priority to Rx Packet Mapping */
+#define RX_DSCP_PRI_MAP1    0x34 /* Rx DSCP Priority to Rx Packet Mapping */
+#define RX_DSCP_PRI_MAP2    0x38 /* Rx DSCP Priority to Rx Packet Mapping */
+#define RX_DSCP_PRI_MAP3    0x3c /* Rx DSCP Priority to Rx Packet Mapping */
+#define RX_DSCP_PRI_MAP4    0x40 /* Rx DSCP Priority to Rx Packet Mapping */
+#define RX_DSCP_PRI_MAP5    0x44 /* Rx DSCP Priority to Rx Packet Mapping */
+#define RX_DSCP_PRI_MAP6    0x48 /* Rx DSCP Priority to Rx Packet Mapping */
+#define RX_DSCP_PRI_MAP7    0x4c /* Rx DSCP Priority to Rx Packet Mapping */
+
+/* Bit definitions for the CPSW2_CONTROL register */
+#define PASS_PRI_TAGGED     (1<<24) /* Pass Priority Tagged */
+#define VLAN_LTYPE2_EN      (1<<21) /* VLAN LTYPE 2 enable */
+#define VLAN_LTYPE1_EN      (1<<20) /* VLAN LTYPE 1 enable */
+#define DSCP_PRI_EN         (1<<16) /* DSCP Priority Enable */
+#define TS_320              (1<<14) /* Time Sync Dest Port 320 enable */
+#define TS_319              (1<<13) /* Time Sync Dest Port 319 enable */
+#define TS_132              (1<<12) /* Time Sync Dest IP Addr 132 enable */
+#define TS_131              (1<<11) /* Time Sync Dest IP Addr 131 enable */
+#define TS_130              (1<<10) /* Time Sync Dest IP Addr 130 enable */
+#define TS_129              (1<<9)  /* Time Sync Dest IP Addr 129 enable */
+#define TS_BIT8             (1<<8)  /* ts_ttl_nonzero? */
+#define TS_ANNEX_D_EN       (1<<4)  /* Time Sync Annex D enable */
+#define TS_LTYPE2_EN        (1<<3)  /* Time Sync LTYPE 2 enable */
+#define TS_LTYPE1_EN        (1<<2)  /* Time Sync LTYPE 1 enable */
+#define TS_TX_EN            (1<<1)  /* Time Sync Transmit Enable */
+#define TS_RX_EN            (1<<0)  /* Time Sync Receive Enable */
+
+#define CTRL_TS_BITS \
+	(TS_320 | TS_319 | TS_132 | TS_131 | TS_130 | TS_129 | TS_BIT8 | \
+	 TS_ANNEX_D_EN | TS_LTYPE1_EN)
+
+#define CTRL_ALL_TS_MASK (CTRL_TS_BITS | TS_TX_EN | TS_RX_EN)
+#define CTRL_TX_TS_BITS  (CTRL_TS_BITS | TS_TX_EN)
+#define CTRL_RX_TS_BITS  (CTRL_TS_BITS | TS_RX_EN)
+
+/* Bit definitions for the CPSW2_TS_SEQ_MTYPE register */
+#define TS_SEQ_ID_OFFSET_SHIFT   (16)    /* Time Sync Sequence ID Offset */
+#define TS_SEQ_ID_OFFSET_MASK    (0x3f)
+#define TS_MSG_TYPE_EN_SHIFT     (0)     /* Time Sync Message Type Enable */
+#define TS_MSG_TYPE_EN_MASK      (0xffff)
+
+/* The PTP event messages - Sync, Delay_Req, Pdelay_Req, and Pdelay_Resp. */
+#define EVENT_MSG_BITS ((1<<0) | (1<<1) | (1<<2) | (1<<3))
+
 #ifdef CONFIG_TI_CPSW_DUAL_EMAC
 
 /* Enable VLAN aware mode to add VLAN for induvudual interface */
@@ -220,22 +289,6 @@ struct cpsw_ss_regs {
 	u32	dlr_ltype;
 };
 
-struct cpsw_slave_regs {
-	u32	max_blks;
-	u32	blk_cnt;
-	u32	flow_thresh;
-	u32	port_vlan;
-	u32	tx_pri_map;
-	u32	ts_seq_mtype;
-#ifdef CONFIG_ARCH_TI814X
-	u32	ts_ctl;
-	u32	ts_seq_ltype;
-	u32	ts_vlan;
-#endif
-	u32	sa_lo;
-	u32	sa_hi;
-};
-
 struct cpsw_host_regs {
 	u32	max_blks;
 	u32	blk_cnt;
@@ -298,7 +351,7 @@ struct cpsw_hw_stats {
 };
 
 struct cpsw_slave {
-	struct cpsw_slave_regs __iomem	*regs;
+	void __iomem			*regs;
 	struct cpsw_sliver_regs __iomem	*sliver;
 	int				slave_num;
 	u32				mac_control;
@@ -342,6 +395,16 @@ struct cpsw_priv {
 	u32 irqs_table[4];
 	u32 num_irqs;
 };
+
+static inline u32 slave_read(struct cpsw_slave *slave, u32 offset)
+{
+	return readl(slave->regs + offset);
+}
+
+static inline void slave_write(struct cpsw_slave *slave, u32 val, u32 offset)
+{
+	writel(val, slave->regs + offset);
+}
 
 #ifdef CONFIG_TI_CPSW_DUAL_EMAC
 
@@ -415,7 +478,10 @@ static inline void cpsw_add_dual_emac_mode_default_ale_entries(
 		struct cpsw_priv *priv, struct cpsw_slave *slave,
 		u32 slave_port)
 {
-	writel(slave->port_vlan, &slave->regs->port_vlan);
+	if (priv->version == CPSW_VERSION1)
+		slave_write(slave, slave->port_vlan, CPSW1_PORT_VLAN);
+	else
+		slave_write(slave, slave->port_vlan, CPSW2_PORT_VLAN);
 	cpsw_ale_add_vlan(priv->ale, slave->port_vlan,
 		1 << slave_port | 1 << priv->host_port, 0,
 		1 << slave_port | 1 << priv->host_port,
@@ -703,8 +769,8 @@ static inline void soft_reset(const char *module, void __iomem *reg)
 static void cpsw_set_slave_mac(struct cpsw_slave *slave,
 			       struct cpsw_priv *priv)
 {
-	__raw_writel(mac_hi(priv->mac_addr), &slave->regs->sa_hi);
-	__raw_writel(mac_lo(priv->mac_addr), &slave->regs->sa_lo);
+	slave_write(slave, mac_hi(priv->mac_addr), SA_HI);
+	slave_write(slave, mac_lo(priv->mac_addr), SA_LO);
 }
 
 static inline u32 cpsw_get_slave_port(struct cpsw_priv *priv, u32 slave_num)
@@ -920,8 +986,11 @@ static void cpsw_slave_open(struct cpsw_slave *slave, struct cpsw_priv *priv)
 	soft_reset(name, &slave->sliver->soft_reset);
 
 	/* setup priority mapping */
-	__raw_writel(0x76543210, &slave->sliver->rx_pri_map);
-	__raw_writel(0x33221100, &slave->regs->tx_pri_map);
+	writel(0x76543210, &slave->sliver->rx_pri_map);
+	if (priv->version == CPSW_VERSION1)
+		slave_write(slave, 0x33221100, CPSW1_TX_PRI_MAP);
+	else
+		slave_write(slave, 0x33221100, CPSW2_TX_PRI_MAP);
 
 	/* setup max packet size, and mac address */
 	__raw_writel(priv->rx_packet_max, &slave->sliver->rx_maxlen);
@@ -953,8 +1022,17 @@ static void cpsw_slave_open(struct cpsw_slave *slave, struct cpsw_priv *priv)
 static inline void cpsw_add_default_vlan(struct cpsw_priv *priv)
 {
 	writel(priv->data.default_vlan, &priv->host_port_regs->port_vlan);
-	writel(priv->data.default_vlan, &priv->slaves[0].regs->port_vlan);
-	writel(priv->data.default_vlan, &priv->slaves[1].regs->port_vlan);
+	if (priv->version == CPSW_VERSION1) {
+		slave_write(&priv->slaves[0], priv->data.default_vlan,
+			    CPSW1_PORT_VLAN);
+		slave_write(&priv->slaves[1], priv->data.default_vlan,
+			    CPSW1_PORT_VLAN);
+	} else {
+		slave_write(&priv->slaves[0], priv->data.default_vlan,
+			    CPSW2_PORT_VLAN);
+		slave_write(&priv->slaves[1], priv->data.default_vlan,
+			    CPSW2_PORT_VLAN);
+	}
 	cpsw_ale_add_vlan(priv->ale, priv->data.default_vlan,
 			ALE_ALL_PORTS << priv->host_port,
 			ALE_ALL_PORTS << priv->host_port,
@@ -1311,6 +1389,7 @@ static int cpsw_config_dump(struct cpsw_priv *priv, u8 *buf, u32 size)
 
 	if (vlan_aware) {
 		int port_vlan;
+		struct cpsw_slave *slave;
 
 		port_state = cpsw_ale_control_get(priv->ale, 0, ALE_PORT_STATE);
 		port_vlan = readl(&priv->host_port_regs->port_vlan);
@@ -1320,14 +1399,22 @@ static int cpsw_config_dump(struct cpsw_priv *priv, u8 *buf, u32 size)
 			port_state_str[port_state]);
 
 		port_state = cpsw_ale_control_get(priv->ale, 1, ALE_PORT_STATE);
-		port_vlan = readl(&priv->slaves[0].regs->port_vlan);
+		slave = &priv->slaves[0];
+		if (priv->version == CPSW_VERSION1)
+			port_vlan = slave_read(slave, CPSW1_PORT_VLAN);
+		else
+			port_vlan = slave_read(slave, CPSW2_PORT_VLAN);
 		out_len += snprintf(buf + out_len, size - out_len,
 			"\t%-8u %-8u %-8u %s\n", 1,
 			port_vlan & 0xfff, (port_vlan > 13) & 0x7,
 			port_state_str[port_state]);
 
 		port_state = cpsw_ale_control_get(priv->ale, 2, ALE_PORT_STATE);
-		port_vlan = readl(&priv->slaves[1].regs->port_vlan);
+		slave = &priv->slaves[1];
+		if (priv->version == CPSW_VERSION1)
+			port_vlan = slave_read(slave, CPSW1_PORT_VLAN);
+		else
+			port_vlan = slave_read(slave, CPSW2_PORT_VLAN);
 		out_len += snprintf(buf + out_len, size - out_len,
 			"\t%-8u %-8u %-8u %s\n", 2,
 			port_vlan & 0xfff, (port_vlan > 13) & 0x7,
@@ -1570,15 +1657,24 @@ static int cpsw_switch_config_ioctl(struct net_device *ndev,
 			if (switchcmd(switch_config).CFI_port)
 				port_vlan |= (1 << 12);
 
-			if (switchcmd(switch_config).port == 0)
+			if (switchcmd(switch_config).port == 0) {
 				writel(port_vlan,
 					&priv->host_port_regs->port_vlan);
-			else if (switchcmd(switch_config).port == 1)
-				writel(port_vlan,
-					&(priv->slaves[0].regs->port_vlan));
-			else
-				writel(port_vlan,
-					&(priv->slaves[1].regs->port_vlan));
+			} else if (switchcmd(switch_config).port == 1) {
+				if (priv->version == CPSW_VERSION1)
+					slave_write(&priv->slaves[0], port_vlan,
+						    CPSW1_PORT_VLAN);
+				else
+					slave_write(&priv->slaves[0], port_vlan,
+						    CPSW2_PORT_VLAN);
+			} else {
+				if (priv->version == CPSW_VERSION1)
+					slave_write(&priv->slaves[1], port_vlan,
+						    CPSW1_PORT_VLAN);
+				else
+					slave_write(&priv->slaves[1], port_vlan,
+						    CPSW2_PORT_VLAN);
+			}
 			ret = 0;
 		} else {
 			dev_err(priv->dev, "Invalid Arguments\n");
