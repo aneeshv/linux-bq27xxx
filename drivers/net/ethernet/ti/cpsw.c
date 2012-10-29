@@ -183,7 +183,7 @@ static int rx_packet_max = CPSW_MAX_PACKET_SIZE;
 module_param(rx_packet_max, int, 0);
 MODULE_PARM_DESC(rx_packet_max, "maximum receive packet size (bytes)");
 
-struct cpsw_ss_regs {
+struct cpsw_wr_regs {
 	u32	id_ver;
 	u32	soft_reset;
 	u32	control;
@@ -202,7 +202,7 @@ struct cpsw_ss_regs {
 	u32	tx_imax;
 };
 
-struct cpsw_regs {
+struct cpsw_ss_regs {
 	u32	id_ver;
 	u32	control;
 	u32	soft_reset;
@@ -314,8 +314,8 @@ struct cpsw_priv {
 #define napi_to_priv(napi)	container_of(napi, struct cpsw_priv, napi)
 	struct device			*dev;
 	struct cpsw_platform_data	data;
-	struct cpsw_regs __iomem	*regs;
-	struct cpsw_ss_regs __iomem	*ss_regs;
+	struct cpsw_ss_regs __iomem	*regs;
+	struct cpsw_wr_regs __iomem	*wr_regs;
 	struct cpsw_hw_stats __iomem	*hw_stats;
 	struct cpsw_host_regs __iomem	*host_port_regs;
 	u32				msg_enable;
@@ -555,8 +555,8 @@ static int cpsw_set_coalesce(struct net_device *ndev,
 
 static void cpsw_intr_enable(struct cpsw_priv *priv)
 {
-	__raw_writel(0xFF, &priv->ss_regs->tx_en);
-	__raw_writel(0xFF, &priv->ss_regs->rx_en);
+	__raw_writel(0xFF, &priv->wr_regs->tx_en);
+	__raw_writel(0xFF, &priv->wr_regs->rx_en);
 
 	cpdma_ctlr_int_ctrl(priv->dma, true);
 	return;
@@ -564,8 +564,8 @@ static void cpsw_intr_enable(struct cpsw_priv *priv)
 
 static void cpsw_intr_disable(struct cpsw_priv *priv)
 {
-	__raw_writel(0, &priv->ss_regs->tx_en);
-	__raw_writel(0, &priv->ss_regs->rx_en);
+	__raw_writel(0, &priv->wr_regs->tx_en);
+	__raw_writel(0, &priv->wr_regs->rx_en);
 
 	cpdma_ctlr_int_ctrl(priv->dma, false);
 	return;
@@ -1968,7 +1968,7 @@ static int cpsw_set_coalesce(struct net_device *ndev,
 
 	coal_intvl = coal->rx_coalesce_usecs;
 
-	int_ctrl =  __raw_readl(&priv->ss_regs->int_control);
+	int_ctrl =  __raw_readl(&priv->wr_regs->int_control);
 	prescale = priv->bus_freq_mhz * 4;
 
 	if (coal_intvl < CPSW_CMINTMIN_INTVL)
@@ -1997,10 +1997,10 @@ static int cpsw_set_coalesce(struct net_device *ndev,
 	int_ctrl |= CPSW_INTPACEEN;
 	int_ctrl &= (~CPSW_INTPRESCALE_MASK);
 	int_ctrl |= (prescale & CPSW_INTPRESCALE_MASK);
-	__raw_writel(int_ctrl, &priv->ss_regs->int_control);
+	__raw_writel(int_ctrl, &priv->wr_regs->int_control);
 
-	__raw_writel(num_interrupts, &priv->ss_regs->rx_imax);
-	__raw_writel(num_interrupts, &priv->ss_regs->tx_imax);
+	__raw_writel(num_interrupts, &priv->wr_regs->rx_imax);
+	__raw_writel(num_interrupts, &priv->wr_regs->tx_imax);
 
 	printk(KERN_INFO"Set coalesce to %d usecs.\n", coal_intvl);
 	priv->coal_intvl = coal_intvl;
@@ -2230,7 +2230,7 @@ static int cpsw_init_slave_emac(struct platform_device *pdev,
 	priv_sl2->host_port_regs = priv->host_port_regs;
 	priv_sl2->hw_stats = priv->hw_stats;
 	priv_sl2->cpsw_ss_res = priv->cpsw_ss_res;
-	priv_sl2->ss_regs = priv->ss_regs;
+	priv_sl2->wr_regs = priv->wr_regs;
 	priv_sl2->dma = priv->dma;
 	priv_sl2->txch = priv->txch;
 	priv_sl2->rxch = priv->rxch;
@@ -2394,7 +2394,7 @@ static int __devinit cpsw_probe(struct platform_device *pdev)
 		dev_err(priv->dev, "unable to map i/o region\n");
 		goto clean_cpsw_ss_iores_ret;
 	}
-	priv->ss_regs = regs;
+	priv->wr_regs = regs;
 
 	for_each_slave(priv, cpsw_slave_init, priv);
 
