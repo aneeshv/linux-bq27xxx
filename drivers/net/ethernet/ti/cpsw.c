@@ -51,6 +51,8 @@ do {								\
 		dev_##level(priv->dev, format, ## __VA_ARGS__);	\
 } while (0)
 
+#define CPSW_VERSION1		0x19010a
+#define CPSW_VERSION2		0x19010c
 #define CPDMA_RXTHRESH		0x0c0
 #define CPDMA_RXFREE		0x0e0
 #define CPDMA_TXHDP_VER1	0x100
@@ -322,6 +324,7 @@ struct cpsw_priv {
 	struct cpsw_hw_stats __iomem	*hw_stats;
 	struct cpsw_host_regs __iomem	*host_port_regs;
 	u32				msg_enable;
+	u32				version;
 	u32				coal_intvl;
 	u32				bus_freq_mhz;
 	struct net_device_stats		stats;
@@ -1001,6 +1004,7 @@ static int cpsw_ndo_open(struct net_device *ndev)
 		(*priv->data.phy_control)(true);
 
 	reg = __raw_readl(&priv->regs->id_ver);
+	priv->version = reg;
 
 	msg(info, ifup, "initializing cpsw version %d.%d (%d)\n",
 	    (reg >> 8 & 0x7), reg & 0xff, (reg >> 11) & 0x1f);
