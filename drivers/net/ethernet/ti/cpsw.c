@@ -22,6 +22,7 @@
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
 #include <linux/netdevice.h>
+#include <linux/net_tstamp.h>
 #include <linux/phy.h>
 #include <linux/workqueue.h>
 #include <linux/delay.h>
@@ -33,6 +34,7 @@
 #include <linux/cpsw.h>
 #include <plat/dmtimer.h>
 #include "cpsw_ale.h"
+#include "cpts.h"
 #include "davinci_cpdma.h"
 
 
@@ -173,6 +175,14 @@ do {								\
 
 /* The PTP event messages - Sync, Delay_Req, Pdelay_Req, and Pdelay_Resp. */
 #define EVENT_MSG_BITS ((1<<0) | (1<<1) | (1<<2) | (1<<3))
+
+/* Bit definitions for the CPSW1_TS_CTL register */
+#define CPSW_V1_TS_RX_EN		BIT(0)
+#define CPSW_V1_TS_TX_EN		BIT(4)
+#define CPSW_V1_MSG_TYPE_OFS		16
+
+/* Bit definitions for the CPSW1_TS_SEQ_LTYPE register */
+#define CPSW_V1_SEQ_ID_OFS_SHIFT	16
 
 #ifdef CONFIG_TI_CPSW_DUAL_EMAC
 
@@ -394,6 +404,7 @@ struct cpsw_priv {
 	/* snapshot of IRQ numbers */
 	u32 irqs_table[4];
 	u32 num_irqs;
+	struct cpts *cpts;
 };
 
 static inline u32 slave_read(struct cpsw_slave *slave, u32 offset)
@@ -405,6 +416,135 @@ static inline void slave_write(struct cpsw_slave *slave, u32 val, u32 offset)
 {
 	writel(val, slave->regs + offset);
 }
+
+#ifdef CONFIG_TI_CPTS
+
+static void cpsw_hwtstamp_v1(struct cpsw_priv *priv)
+{
+	struct cpsw_slave *slave = &priv->slaves[priv->data.cpts_active_slave];
+	u32 ts_en, seq_id;
+
+	if (!priv->cpts->tx_enable && !priv->cpts->rx_enable) {
+		slave_write(slave, 0, CPSW1_TS_CTL);
+		return;
+	}
+
+	seq_id = (30 << CPSW_V1_SEQ_ID_OFS_SHIFT) | ETH_P_1588;
+	ts_en = EVENT_MSG_BITS << CPSW_V1_MSG_TYPE_OFS;
+
+	if (priv->cpts->tx_enable)
+		ts_en |= CPSW_V1_TS_TX_EN;
+
+	if (priv->cpts->rx_enable)
+		ts_en |= CPSW_V1_TS_RX_EN;
+
+	slave_write(slave, ts_en, CPSW1_TS_CTL);
+	slave_write(slave, seq_id, CPSW1_TS_SEQ_LTYPE);
+}
+
+static void cpsw_hwtstamp_v2(struct cpsw_priv *priv)
+{
+	struct cpsw_slave *slave = &priv->slaves[priv->data.cpts_active_slave];
+	u32 ctrl, mtype;
+
+	ctrl = slave_read(slave, CPSW2_CONTROL);
+	ctrl &= ~CTRL_ALL_TS_MASK;
+
+	if (priv->cpts->tx_enable)
+		ctrl |= CTRL_TX_TS_BITS;
+
+	if (priv->cpts->rx_enable)
+		ctrl |= CTRL_RX_TS_BITS;
+
+	mtype = (30 << TS_SEQ_ID_OFFSET_SHIFT) | EVENT_MSG_BITS;
+
+	slave_write(slave, mtype, CPSW2_TS_SEQ_MTYPE);
+	slave_write(slave, ctrl, CPSW2_CONTROL);
+	__raw_writel(ETH_P_1588, &priv->regs->ts_ltype);
+}
+
+#ifdef CONFIG_TI_CPSW_DUAL_EMAC
+static int cpsw_select_ts_slave_port(struct cpsw_priv *priv)
+{
+	if (priv->cpts->tx_enable)
+		return -ENOTSUPP;
+	priv->data.cpts_active_slave = priv->emac_port;
+	return 0;
+}
+#else
+static int cpsw_select_ts_slave_port(struct cpsw_priv *priv)
+{
+	return 0;
+}
+#endif
+
+static int cpsw_hwtstamp_ioctl(struct net_device *ndev, struct ifreq *ifr)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+	struct cpts *cpts = priv->cpts;
+	struct hwtstamp_config cfg;
+
+	if (cpsw_select_ts_slave_port(priv))
+		return -ENOTSUPP;
+
+	if (copy_from_user(&cfg, ifr->ifr_data, sizeof(cfg)))
+		return -EFAULT;
+
+	/* reserved for future extensions */
+	if (cfg.flags)
+		return -EINVAL;
+
+	switch (cfg.tx_type) {
+	case HWTSTAMP_TX_OFF:
+		cpts->tx_enable = 0;
+		break;
+	case HWTSTAMP_TX_ON:
+		cpts->tx_enable = 1;
+		break;
+	default:
+		return -ERANGE;
+	}
+
+	switch (cfg.rx_filter) {
+	case HWTSTAMP_FILTER_NONE:
+		cpts->rx_enable = 0;
+		break;
+	case HWTSTAMP_FILTER_ALL:
+	case HWTSTAMP_FILTER_PTP_V1_L4_EVENT:
+	case HWTSTAMP_FILTER_PTP_V1_L4_SYNC:
+	case HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ:
+		return -ERANGE;
+	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
+	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ:
+	case HWTSTAMP_FILTER_PTP_V2_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
+		cpts->rx_enable = 1;
+		cfg.rx_filter = HWTSTAMP_FILTER_PTP_V2_EVENT;
+		break;
+	default:
+		return -ERANGE;
+	}
+
+	switch (priv->version) {
+	case CPSW_VERSION1:
+		cpsw_hwtstamp_v1(priv);
+		break;
+	case CPSW_VERSION2:
+		cpsw_hwtstamp_v2(priv);
+		break;
+	default:
+		return -ENOTSUPP;
+	}
+
+	return copy_to_user(ifr->ifr_data, &cfg, sizeof(cfg)) ? -EFAULT : 0;
+}
+
+#endif
 
 #ifdef CONFIG_TI_CPSW_DUAL_EMAC
 
@@ -651,6 +791,7 @@ void cpsw_tx_handler(void *token, int len, int status)
 
 	if (unlikely(netif_queue_stopped(ndev)))
 		netif_start_queue(ndev);
+	cpts_tx_timestamp(priv->cpts, skb);
 	priv->stats.tx_packets++;
 	priv->stats.tx_bytes += len;
 	dev_kfree_skb_any(skb);
@@ -673,6 +814,7 @@ void cpsw_rx_handler(void *token, int len, int status)
 
 	if (likely(status >= 0)) {
 		skb_put(skb, len);
+		cpts_rx_timestamp(priv->cpts, skb);
 		skb->protocol = eth_type_trans(skb, ndev);
 		netif_receive_skb(skb);
 		priv->stats.rx_bytes += len;
@@ -1134,6 +1276,11 @@ static int cpsw_ndo_open(struct net_device *ndev)
 		 * receive descs
 		 */
 		msg(info, ifup, "submitted %d rx descriptors\n", i);
+
+		if (cpts_register(&priv->pdev->dev, priv->cpts,
+				  priv->data.cpts_clock_mult,
+				  priv->data.cpts_clock_shift))
+			dev_err(priv->dev, "error registering cpts device\n");
 	}
 
 	/* Enable Interrupt pacing if configured */
@@ -1192,6 +1339,8 @@ static int cpsw_ndo_stop(struct net_device *ndev)
 
 		cpdma_ctlr_stop(priv->dma);
 		cpsw_ale_stop(priv->ale);
+
+		cpts_unregister(priv->cpts);
 	}
 
 	device_remove_file(&ndev->dev, &dev_attr_hw_stats);
@@ -1217,6 +1366,12 @@ static netdev_tx_t cpsw_ndo_start_xmit(struct sk_buff *skb,
 		msg(err, tx_err, "packet pad failed");
 		goto fail;
 	}
+
+	if (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP &&
+			priv->cpts->tx_enable)
+		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+
+	skb_tx_timestamp(skb);
 
 	ret = cpsw_tx_packet_submit(ndev, priv, skb);
 	if (unlikely(ret != 0)) {
@@ -1971,6 +2126,11 @@ static int cpsw_ndo_do_ioctl(struct net_device *ndev, struct ifreq *ifrq,
 	case SIOCSWITCHCONFIG:
 		return cpsw_switch_config_ioctl(ndev, ifrq, cmd);
 
+#ifdef CONFIG_TI_CPTS
+	case SIOCSHWTSTAMP:
+		return cpsw_hwtstamp_ioctl(ndev, ifrq);
+#endif
+
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -2340,6 +2500,7 @@ static int cpsw_init_slave_emac(struct platform_device *pdev,
 	priv_sl2->ale = priv->ale;
 	priv_sl2->emac_port = 1;
 	priv->slaves[1].ndev = ndev;
+	priv_sl2->cpts = priv->cpts;
 	for_each_slave(priv_sl2, cpsw_slave_init, priv_sl2);
 
 	for (i = 0; i < priv->num_irqs; i++) {
@@ -2411,6 +2572,7 @@ static int __devinit cpsw_probe(struct platform_device *pdev)
 	priv->dev  = &ndev->dev;
 	priv->msg_enable = netif_msg_init(debug_level, CPSW_DEBUG);
 	priv->rx_packet_max = max(rx_packet_max, 128);
+	priv->cpts = devm_kzalloc(&pdev->dev, sizeof(struct cpts), GFP_KERNEL);
 
 	if (is_valid_ether_addr(data->mac_addr)) {
 		memcpy(priv->mac_addr, data->mac_addr, ETH_ALEN);
@@ -2476,6 +2638,7 @@ static int __devinit cpsw_probe(struct platform_device *pdev)
 	priv->host_port = data->host_port_num;
 	priv->host_port_regs = regs + data->host_port_reg_ofs;
 	priv->hw_stats = regs + data->hw_stats_reg_ofs;
+	priv->cpts->reg = regs + data->cpts_reg_ofs;
 
 	priv->cpsw_ss_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (!priv->cpsw_ss_res) {

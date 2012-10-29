@@ -37,6 +37,11 @@ struct cpsw_platform_data {
 	u32	bd_ram_size;  /*buffer descriptor ram size */
 	u32	hw_ram_addr; /*if the HW address for BD RAM is different */
 
+	u32	cpts_reg_ofs;		/* cpts registers */
+	u32	cpts_active_slave;	/* time stamping slave */
+	u32	cpts_clock_mult; /* convert input clock ticks to nanoseconds */
+	u32	cpts_clock_shift; /* convert input clock ticks to nanoseconds */
+
 	u8	mac_addr[ETH_ALEN];
 
 	int	rx_descs;
