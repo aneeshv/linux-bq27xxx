@@ -131,8 +131,15 @@ static int am33xx_pm_suspend(void)
 	/*
 	 * Disable the GPIO module. This ensure that
 	 * only sWAKEUP interrupts to Cortex-M3 get generated
+	 *
+	 * XXX: EVM_SK uses a GPIO0 pin for VTP control
+	 * in suspend and hence we can't do this for EVM_SK
+	 * alone. The side-effect of this is that GPIO wakeup
+	 * might have issues. Refer to commit 672639b for the
+	 * details
 	 */
-	omap_hwmod_idle(gpio1_oh);
+	if (suspend_cfg_param_list[EVM_ID] != EVM_SK)
+		omap_hwmod_idle(gpio1_oh);
 
 	if (gfx_l3_clkdm && gfx_l4ls_clkdm) {
 		clkdm_sleep(gfx_l3_clkdm);
@@ -173,7 +180,8 @@ static int am33xx_pm_suspend(void)
 	 * Enable the GPIO module. Once the driver is
 	 * fully adapted to runtime PM this will go away
 	 */
-	omap_hwmod_enable(gpio1_oh);
+	if (suspend_cfg_param_list[EVM_ID] != EVM_SK)
+		omap_hwmod_enable(gpio1_oh);
 
 	return ret;
 }
