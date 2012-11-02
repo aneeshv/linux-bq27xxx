@@ -80,6 +80,11 @@ struct ti81xx_usb_regs {
 };
 #endif
 
+#define BABBLE_WORKAROUND_1 0
+#define BABBLE_WORKAROUND_2 1
+
+#define BABBLE_WORKAROUND (BABBLE_WORKAROUND_2)
+
 struct ti81xx_glue {
 	struct device *dev;
 	struct resource *mem_pa;	/* usbss memory resource */
@@ -1173,6 +1178,7 @@ int ti81xx_musb_init(struct musb *musb)
 	INIT_WORK(&musb->work, evm_deferred_musb_restart);
 	musb->enable_babble_work = 0;
 
+	musb->enable_babble_work = BABBLE_WORKAROUND;
 	musb_writel(reg_base, USB_IRQ_EOI, 0);
 
 	return 0;
