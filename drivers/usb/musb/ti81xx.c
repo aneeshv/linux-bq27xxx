@@ -881,7 +881,8 @@ void musb_babble_workaround(struct musb *musb)
 	mdelay(100);
 
 	/* re-setup the endpoint fifo addresses */
-	ep_config_from_table(musb);
+	if (musb->ops->reinit)
+		musb->ops->reinit(plat->config->multipoint, musb);
 	musb_start(musb);
 }
 
@@ -1255,6 +1256,7 @@ static struct musb_platform_ops ti81xx_ops = {
 	.txfifoempty_intr_enable = txfifoempty_intr_enable,
 	.txfifoempty_intr_disable = txfifoempty_intr_disable,
 #endif
+	.reinit = musb_reinit,
 };
 
 static void __devexit ti81xx_delete_musb_pdev(struct ti81xx_glue *glue, u8 id)
