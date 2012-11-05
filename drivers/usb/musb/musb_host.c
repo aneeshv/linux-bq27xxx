@@ -358,21 +358,23 @@ static inline void musb_save_toggle(struct musb_qh *qh, int is_in,
 
 	if (is_in) {
 		csr = musb_readw(epio, MUSB_RXCSR) & MUSB_RXCSR_H_DATATOGGLE;
-		curr_toggle = csr ? 1 : 0;
+		if (musb->datatog_fix) {
+			curr_toggle = csr ? 1 : 0;
 
-		/* check if data toggle has gone out of sync */
-		if (is_dma_capable() && qh->hw_ep->rx_channel &&
+			/* check if data toggle has gone out of sync */
+			if (is_dma_capable() && qh->hw_ep->rx_channel &&
 				curr_toggle == qh->hw_ep->prev_toggle) {
-			dev_dbg(musb->controller,
+				dev_dbg(musb->controller,
 				"Data toggle same as previous (=%d) on ep%d\n",
 					curr_toggle, qh->hw_ep->epnum);
 
-			csr = musb_readw(epio, MUSB_RXCSR);
-			csr |= MUSB_RXCSR_H_DATATOGGLE |
+				csr = musb_readw(epio, MUSB_RXCSR);
+				csr |= MUSB_RXCSR_H_DATATOGGLE |
 					MUSB_RXCSR_H_WR_DATATOGGLE;
-			musb_writew(epio, MUSB_RXCSR, csr);
+				musb_writew(epio, MUSB_RXCSR, csr);
 
-			csr = 1;
+				csr = 1;
+			}
 		}
 	} else {
 		csr = musb_readw(epio, MUSB_TXCSR) & MUSB_TXCSR_H_DATATOGGLE;
@@ -945,12 +947,15 @@ static void musb_ep_program(struct musb *musb, u8 epnum,
 			musb_writew(hw_ep->regs, MUSB_RXCSR, csr);
 			csr = musb_readw(hw_ep->regs, MUSB_RXCSR);
 
-			/*
-			 * Save the data toggle value which can be compared
-			 * later to see if data toggle goes out of sync
-			 */
-			hw_ep->prev_toggle = (csr &
-				MUSB_RXCSR_H_DATATOGGLE) ? 1 : 0;
+			if (musb->datatog_fix) {
+				/*
+				 * Save the data toggle value which can be
+				 * compared later to see if data toggle goes
+				 * out of sync
+				 */
+				hw_ep->prev_toggle = (csr &
+					MUSB_RXCSR_H_DATATOGGLE) ? 1 : 0;
+			}
 
 			/*
 			 * Unless caller treats short RX transfers as

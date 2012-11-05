@@ -896,24 +896,28 @@ sched:
 	if (is_host_active(cppi->musb) && rx_ch->channel.actual_len) {
 		void __iomem *epio = rx_ch->end_pt->regs;
 		u16 csr = musb_readw(epio, MUSB_RXCSR);
-		u8 curr_toggle = (csr & MUSB_RXCSR_H_DATATOGGLE) ? 1 : 0;
 
-		/* check if data toggle bit got out of sync */
-		if (curr_toggle == rx_ch->end_pt->prev_toggle) {
-			dev_dbg(musb->controller,
+		if (musb->datatog_fix) {
+			u8 curr_toggle;
+			curr_toggle = (csr & MUSB_RXCSR_H_DATATOGGLE) ? 1 : 0;
+
+			/* check if data toggle bit got out of sync */
+			if (curr_toggle == rx_ch->end_pt->prev_toggle) {
+				dev_dbg(musb->controller,
 				"Data toggle same as previous (=%d) on ep%d\n",
 					curr_toggle, rx_ch->end_pt->epnum);
 
-			csr |= MUSB_RXCSR_H_DATATOGGLE |
+				csr |= MUSB_RXCSR_H_DATATOGGLE |
 					MUSB_RXCSR_H_WR_DATATOGGLE;
-			musb_writew(epio, MUSB_RXCSR, csr);
+				musb_writew(epio, MUSB_RXCSR, csr);
 
-			rx_ch->end_pt->prev_toggle = !curr_toggle;
-		} else {
-			rx_ch->end_pt->prev_toggle = curr_toggle;
+				rx_ch->end_pt->prev_toggle = !curr_toggle;
+			} else {
+				rx_ch->end_pt->prev_toggle = curr_toggle;
+			}
+			csr = musb_readw(epio, MUSB_RXCSR);
 		}
 
-		csr = musb_readw(epio, MUSB_RXCSR);
 		csr |= MUSB_RXCSR_H_REQPKT | MUSB_RXCSR_H_WZC_BITS;
 		musb_writew(epio, MUSB_RXCSR, csr);
 	}
@@ -1485,11 +1489,18 @@ cppi41_dma_controller_create(struct musb  *musb, void __iomem *mregs)
 	 * when they go wrong.
 	 * This issue is expected to be fixed in RTL version post 0xD.
 	 */
+	cppi->musb->datatog_fix = 0;
 	if ((cppi->cppi_info->version & USBSS_RTL_VERSION_MASK) >
-			USBSS_RTL_VERSION_D)
+			USBSS_RTL_VERSION_D) {
+		dev_dbg(musb->controller, "musb%d: enable cppi41 RxDma "
+			"grndis-mode\n", musb->id);
 		cppi->cppi_info->grndis_for_host_rx = 1;
-	else
+	} else {
+		dev_dbg(musb->controller, "musb%d: disable cppi41 RxDma "
+			"grndis-mode\n", musb->id);
 		cppi->cppi_info->grndis_for_host_rx = 0;
+		cppi->musb->datatog_fix = 1;
+	}
 
 	/* enable infinite mode only for ti81xx silicon rev2 */
 	if (cpu_is_am33xx() || cpu_is_ti816x()) {
@@ -1693,9 +1704,7 @@ static void usb_process_rx_bd(struct cppi41 *cppi,
 			musb_dma_completion(cppi->musb, ep_num, 0);
 		}
 	} else {
-			if ((is_peripheral_active(cppi->musb) ||
-				!cppi->cppi_info->grndis_for_host_rx) &&
-				(rx_ch->length - rx_ch->curr_offset) > 0)
+			if ((rx_ch->length - rx_ch->curr_offset) > 0)
 				cppi41_next_rx_segment(rx_ch);
 	}
 }
