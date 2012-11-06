@@ -222,6 +222,19 @@ wait_sc_\num:
 	mov	r2, #(1 << 7)
 	str	r2, [r0, #OMAP4_GPIO_CLEARDATAOUT]
 
+	/* Disable GPIO0 for EVM_SK here */
+	ldr	r1, virt_gpio0_clkctrl
+	ldr	r2, [r1]
+	bic	r2, r2, #(3 << 0)
+	str	r2, [r1]
+
+	ldr	r1, virt_gpio0_clkctrl
+wait_gpio0_disable:
+	ldr	r2, [r1]
+	ldr	r3, module_disabled_val
+	cmp	r2, r3
+	bne	wait_gpio0_disable
+
 no_gpio_toggle:
 	/* Put IO in mDDR (cmos) mode */
 	ldr	r0, virt_ddr_io_ctrl
@@ -403,6 +416,15 @@ poll_vtp_ready_abt3:
 	cmp	r6, #EVM_SK
 	bne	no_gpio_toggle2
 
+	/* Enable GPIO0 for EVM-SK here */
+	ldr	r1, virt_gpio0_clkctrl
+	mov	r2, #0x2
+	str	r2, [r1]
+wait_gpio0_enable:
+	ldr	r3, [r1]
+	cmp	r2, r3
+	bne	wait_gpio0_enable
+
 	/* Drive GPIO0_7 HIGH */
 	ldr	r0, gpio0_addr_virt
 	ldr	r1, [r0, #OMAP4_GPIO_SETDATAOUT]
@@ -577,6 +599,15 @@ poll_vtp_ready3:
 	ldr	r6, evm_id
 	cmp	r6, #EVM_SK
 	bne	no_gpio_toggle3
+
+	/* Enable GPIO0 for EVM-SK here */
+	ldr	r1, phys_gpio0_clkctrl
+	mov	r2, #0x2
+	str	r2, [r1]
+wait_gpio0_phys_enable:
+	ldr	r3, [r1]
+	cmp	r2, r3
+	bne	wait_gpio0_phys_enable
 
 	/* Drive GPIO0_7 HIGH */
 	ldr	r0, gpio0_phys_addr
@@ -781,6 +812,11 @@ virt_sram_ldo_addr:
 	.word	AM33XX_PRM_LDO_SRAM_MPU_CTRL
 phys_sram_ldo_addr:
 	.word	AM33XX_PRM_BASE + AM33XX_PRM_DEVICE_MOD + AM33XX_PRM_LDO_SRAM_MPU_CTRL_OFFSET
+
+virt_gpio0_clkctrl:
+	.word	AM33XX_CM_WKUP_GPIO0_CLKCTRL
+phys_gpio0_clkctrl:
+	.word	AM33XX_CM_BASE + AM33XX_CM_WKUP_MOD + AM33XX_CM_WKUP_GPIO0_CLKCTRL_OFFSET
 
 virt_emif_clkctrl:
 	.word	AM33XX_CM_PER_EMIF_CLKCTRL
