@@ -82,6 +82,7 @@ struct ti81xx_usb_regs {
 
 #define BABBLE_WORKAROUND_1 0
 #define BABBLE_WORKAROUND_2 1
+#define BABBLE_WORKAROUND_3 2
 
 #define BABBLE_WORKAROUND (BABBLE_WORKAROUND_2)
 
@@ -862,6 +863,9 @@ void musb_babble_workaround(struct musb *musb)
 	struct musb_hdrc_platform_data *plat = dev->platform_data;
 	struct omap_musb_board_data *data = plat->board_data;
 
+	ERR("Babble: devtcl(%x)Restarting musb....\n",
+			 musb_readb(musb->mregs, MUSB_DEVCTL));
+
 	/* Reset the controller */
 	musb_writel(reg_base, USB_CTRL_REG, USB_SOFT_RESET_MASK);
 	while ((musb_readl(reg_base, USB_CTRL_REG) & 0x1))
@@ -886,13 +890,86 @@ void musb_babble_workaround(struct musb *musb)
 	musb_start(musb);
 }
 
+void musb_babble_hwfix(struct musb *musb)
+{
+	int timeout = 10;
+	u8 temp, session_restart = 0;
+
+	/* wait for 320 clock cycles and check whether still babble
+	 * present on the bus */
+	udelay(6);
+
+	temp = musb_readb(musb->mregs, MUSB_MISC);
+	dev_dbg(musb->controller, "babble: MUSB MISC value %x\n", temp);
+
+	/* check line monitor flag to check whether babble is
+	 * due to noise
+	 */
+	dev_dbg(musb->controller, "STUCK_J is %s\n",
+		temp & MUSB_MISC_STUCK_J ? "set" : "reset");
+
+	if (temp & MUSB_MISC_STUCK_J) {
+		/* babble is due to noise, then set transmit idle (d7 bit)
+		 * to resume normal operation
+		 */
+		temp = musb_readb(musb->mregs, MUSB_MISC);
+		temp |= MUSB_MISC_FORCE_TXIDLE;
+		musb_writeb(musb->mregs, MUSB_MISC, temp);
+
+		/* wait till line monitor flag cleared */
+		dev_dbg(musb->controller, "Set TXIDLE, wait J to clear\n");
+		do {
+			temp = musb_readb(musb->mregs, MUSB_MISC);
+			udelay(1);
+		} while ((temp & MUSB_MISC_STUCK_J) && timeout--);
+
+		/* check whether stuck_at_j bit cleared */
+		temp = musb_readb(musb->mregs, MUSB_MISC);
+		if (temp & MUSB_MISC_STUCK_J) {
+			/* real babble condition is occured
+			 * restart the controller to start the
+			 * session again
+			 */
+			dev_dbg(musb->controller, "J not cleared, misc (%x)\n",
+				temp);
+
+			session_restart = 1;
+		} else
+			pr_info("babble: controller resume normal operation\n");
+	} else
+		session_restart = 1;
+
+	if (session_restart) {
+		unsigned long flags;
+
+		dev_dbg(musb->controller, "Reset session and restart controller\n");
+		temp = musb_readb(musb->mregs, MUSB_DEVCTL);
+		temp &= ~MUSB_DEVCTL_SESSION;
+		musb_writeb(musb->mregs, MUSB_DEVCTL, temp);
+
+		 /* inform stack about disconnect of root hub */
+		spin_lock_irqsave(&musb->lock, flags);
+		musb->int_usb = MUSB_INTR_DISCONNECT;
+		musb_interrupt(musb);
+		spin_unlock_irqrestore(&musb->lock, flags);
+
+		/* restart the session */
+		musb_babble_workaround(musb);
+	}
+}
+
 static void evm_deferred_musb_restart(struct work_struct *work)
 {
 	struct musb *musb =
 		container_of(work, struct musb, work);
 
-	ERR("deferred musb restart musbid(%d)\n", musb->id);
-	musb_babble_workaround(musb);
+	if (musb->enable_babble_work == BABBLE_WORKAROUND_3) {
+		/* hw will not end the session  */
+		musb_babble_hwfix(musb);
+	} else {
+		ERR("deferred musb restart musbid(%d)\n", musb->id);
+		musb_babble_workaround(musb);
+	}
 }
 
 static irqreturn_t ti81xx_interrupt(int irq, void *hci)
@@ -955,11 +1032,10 @@ static irqreturn_t ti81xx_interrupt(int irq, void *hci)
 			is_babble = 1;
 
 	if (is_babble) {
-		if (musb->enable_babble_work)
+		if (musb->enable_babble_work != BABBLE_WORKAROUND_3)
 			musb->int_usb = MUSB_INTR_DISCONNECT;
 
 		ERR("CAUTION: musb%d: Babble Interrupt Occured\n", musb->id);
-		ERR("Please issue long reset to make usb functional !!\n");
 	}
 
 	if (usbintr & (USB_INTR_DRVVBUS << USB_INTR_USB_SHIFT)) {
@@ -1054,14 +1130,12 @@ static irqreturn_t ti81xx_interrupt(int irq, void *hci)
 	}
 
 	if (is_babble) {
-		if (!musb->enable_babble_work) {
+		if (musb->enable_babble_work)
+			schedule_work(&musb->work);
+		else {
 			musb_writeb(musb->mregs, MUSB_DEVCTL,
 				musb_readb(musb->mregs, MUSB_DEVCTL) |
 				MUSB_DEVCTL_SESSION);
-		} else {
-			ERR("Babble: devtcl(%x)Restarting musb....\n",
-				 musb_readb(musb->mregs, MUSB_DEVCTL));
-			schedule_work(&musb->work);
 		}
 	}
 	return ret;
@@ -1187,6 +1261,21 @@ int ti81xx_musb_init(struct musb *musb)
 
 	musb->enable_babble_work = BABBLE_WORKAROUND;
 	musb_writel(reg_base, USB_IRQ_EOI, 0);
+
+	if (data->babble_ctrl) {
+		u8 temp;
+		/* enable s/w controlled session bit during
+		 * babble condition
+		 */
+		temp = musb_readb(musb->mregs, MUSB_MISC);
+		temp |= MUSB_MISC_SW_SESSION_CTRL;
+		musb_writeb(musb->mregs, MUSB_MISC, temp);
+
+		musb->enable_babble_work = BABBLE_WORKAROUND_3;
+		pr_info("musb%d: Enabled SW babble control\n", musb->id);
+		dev_dbg(musb->controller, "musb.misc regval %x\n",
+			musb_readb(musb->mregs, MUSB_MISC));
+	}
 
 	return 0;
 }

@@ -478,6 +478,7 @@ struct musb {
 	short			fifo_mode;
 	u8			txfifo_intr_enable;
 	u8			datatog_fix;
+	u8			hw_babble_ctrl;
 };
 
 static inline struct musb *gadget_to_musb(struct usb_gadget *g)
