@@ -1488,19 +1488,21 @@ cppi41_dma_controller_create(struct musb  *musb, void __iomem *mregs)
 	 * As a software workaround use transparent mode and correct data toggle
 	 * when they go wrong.
 	 * This issue is expected to be fixed in RTL version post 0xD.
+	 * Since RTL version is not available to distinguish the fix, based on
+	 * soc revision the rxdma generic rndis shall be enabled/disabled by
+	 * platform driver as mentioned below
+	 * set cppi_info->grndis_for_host_rx = 1 to enable
+	 *			rxdma generic rndis mode
+	 * set cppi_info->grndis_for_host_rx = 0 and
+	 *	cppi->musb->datatog_fix = 0 to disable the rxdma generic rndis.
 	 */
-	cppi->musb->datatog_fix = 0;
-	if ((cppi->cppi_info->version & USBSS_RTL_VERSION_MASK) >
-			USBSS_RTL_VERSION_D) {
-		dev_dbg(musb->controller, "musb%d: enable cppi41 RxDma "
-			"grndis-mode\n", musb->id);
-		cppi->cppi_info->grndis_for_host_rx = 1;
-	} else {
-		dev_dbg(musb->controller, "musb%d: disable cppi41 RxDma "
-			"grndis-mode\n", musb->id);
-		cppi->cppi_info->grndis_for_host_rx = 0;
+	if (cppi->cppi_info->grndis_for_host_rx)
+		cppi->musb->datatog_fix = 0;
+	else
 		cppi->musb->datatog_fix = 1;
-	}
+	dev_dbg(musb->controller, "musb%d: %s cppi41 rxdma grndis-mode\n",
+		musb->id, cppi->cppi_info->grndis_for_host_rx ? "enable" :
+			"disable");
 
 	/* enable infinite mode only for ti81xx silicon rev2 */
 	if (cpu_is_am33xx() || cpu_is_ti816x()) {

@@ -89,6 +89,7 @@ struct omap_musb_board_data {
 	u16	power;
 	unsigned extvbus:1;
 	u8	instances;
+	u8	grndis_for_host_rx;
 	void	(*set_phy_power)(u8 id, u8 on);
 	void	(*clear_irq)(void);
 	void	(*set_mode)(u8 mode);

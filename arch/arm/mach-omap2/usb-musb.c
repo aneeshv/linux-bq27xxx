@@ -99,6 +99,9 @@ void __init usb_musb_init(struct omap_musb_board_data *musb_board_data)
 		board_data->set_phy_power = ti81xx_musb_phy_power;
 		oh_name = "usb_otg_hs";
 		name = "musb-ti81xx";
+		board_data->grndis_for_host_rx = 0;
+		if (cpu_is_am33xx() && omap_rev() >= AM335X_REV_ES2_0)
+			board_data->grndis_for_host_rx = 1;
 	} else {
 		oh_name = "usb_otg_hs";
 		name = "musb-omap2430";

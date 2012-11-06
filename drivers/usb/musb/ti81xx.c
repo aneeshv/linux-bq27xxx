@@ -1174,6 +1174,12 @@ int ti81xx_musb_init(struct musb *musb)
 		printk(KERN_DEBUG "TxFifo Empty intr enabled\n");
 	else
 		printk(KERN_DEBUG "TxFifo Empty intr disabled\n");
+
+	/* enable rxdma GRNDIS mode, as Extra IN token
+	 * issue fixed in PG2.0 RTL
+	 */
+	if (data->grndis_for_host_rx)
+		usb_cppi41_info[musb->id].grndis_for_host_rx = 1;
 #endif
 	/* enable babble workaround */
 	INIT_WORK(&musb->work, evm_deferred_musb_restart);
