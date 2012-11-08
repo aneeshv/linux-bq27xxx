@@ -35,6 +35,8 @@
 #include <media/v4l2-event.h>
 //*************************************
 #include "cssp_camera.h"
+#include <media/mt9t112.h>
+#include <media/soc_camera.h>
 
 
 /*
@@ -317,6 +319,13 @@ static int configure_camera_sensor(struct cssp_cam_dev *cam)
 			.code = V4L2_MBUS_FMT_YUYV8_2X8,
 			.colorspace = V4L2_COLORSPACE_JPEG,
 	};
+
+	if (cam->rev > 4) {
+		struct soc_camera_link *scl = (struct soc_camera_link *)info->platform_data;
+		struct mt9t112_camera_info *mci = (struct mt9t112_camera_info *)scl->priv;
+
+		mci->flags |= MT9T112_FLAG_HISPEED;
+	}
 
 	/* Enable the clock just for the time of loading the camera driver and disable after that */
 	/* It is going to be be re-enabled later, when camera will be in use */
@@ -1137,7 +1146,7 @@ module_platform_driver(cssp_cam_driver);
 /*
  * Macros sets license, author and description
  */
-MODULE_LICENSE("GPLv2");
+MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Dan Aizenstros, Damian Eppel, Przemek Szewczyk");
 MODULE_DESCRIPTION("QuickLogic Camera Interface driver");
 

@@ -460,21 +460,34 @@ static int mt9t112_set_resolution_params(const struct i2c_client *client)
 		resolution->fine_max    = 0x00FF;
 		resolution->base_lines  = 0x032D;
 		resolution->min_lin_len = 0x0378;
-		resolution->line_len    = 0x091C;
 		resolution->con_width   = 0x0508;
 		resolution->con_height  = 0x02D8;
-		resolution->s_f1_50     = 0x23;
-		resolution->s_f2_50     = 0x25;
-		resolution->s_f1_60     = 0x2B;
-		resolution->s_f2_60     = 0x2D;
-		resolution->per_50      = 0xDC;
 		resolution->per_50_M    = 0x00;
-		resolution->per_60      = 0xB7;
-		resolution->fd_w_height = 0x05;
 		resolution->tx_water    = 0x0210;
-		resolution->max_fd_50   = 0x0004;
 		resolution->max_fd_60   = 0x0004;
-		resolution->targ_fd     = 0x0004;
+		if (priv->info->flags & MT9T112_FLAG_HISPEED) {
+			resolution->line_len    = 0x0833;
+			resolution->s_f1_50     = 0x20;
+			resolution->s_f2_50     = 0x22;
+			resolution->s_f1_60     = 0x27;
+			resolution->s_f2_60     = 0x29;
+			resolution->per_50      = 0xF4;
+			resolution->per_60      = 0xCB;
+			resolution->fd_w_height = 0x06;
+			resolution->max_fd_50   = 0x0003;
+			resolution->targ_fd     = 0x0003;
+		} else {
+			resolution->line_len    = 0x091C;
+			resolution->s_f1_50     = 0x23;
+			resolution->s_f2_50     = 0x25;
+			resolution->s_f1_60     = 0x2B;
+			resolution->s_f2_60     = 0x2D;
+			resolution->per_50      = 0xDC;
+			resolution->per_60      = 0xB7;
+			resolution->fd_w_height = 0x05;
+			resolution->max_fd_50   = 0x0004;
+			resolution->targ_fd     = 0x0004;
+		}
 	} else if ((priv->frame.width <= 1024) && (priv->frame.height <= 768) &&
 		   (priv->frame.width != priv->frame.height)) {
 		resolution->col_strt    = 0x000;
