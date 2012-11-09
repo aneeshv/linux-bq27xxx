@@ -203,7 +203,6 @@ struct omap_gpio_platform_data {
 	bool dbck_flag;		/* dbck required or not - True for OMAP3&4 */
 
 	struct omap_gpio_reg_offs *regs;
-	bool loses_context;	/* whether the bank would ever lose context */
 };
 
 /* TODO: Analyze removing gpio_bank_count usage from driver code */
