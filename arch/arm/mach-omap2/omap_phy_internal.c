@@ -267,7 +267,7 @@ void ti81xx_musb_phy_power(u8 id, u8 on)
 {
 	void __iomem *scm_base = NULL;
 	u32 usbphycfg;
-	u32 usbwkupctrl;
+	u32 usbwkupctrl = 0;
 
 	if (cpu_is_ti816x())
 		scm_base = ioremap(TI81XX_SCM_BASE, SZ_2K);
