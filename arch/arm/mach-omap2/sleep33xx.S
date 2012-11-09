@@ -186,7 +186,29 @@ wait_sc_\num:
 
 	ddr_self_refresh	1
 
-	/* Disable VTT_Regulator on EVM-SK*/
+	 /*
+	 * Disable VTT_Regulator on EVM-SK
+	 *
+	 * Explanation from Hardware team :
+	 * On EVM-SK, the CKE signal does not properly go low
+	 * during DDR self refresh because of two issues:
+	 * 1.Because of a bug in the silicon, we have to disable VTP
+	 * in order to get to a low power state.
+	 * 2.As a consequence of #1, none of the ctrl/addr outputs
+	 * are driven by the EMIF/PHY.
+	 * This is why we have to enable a pull up on DDR_RESET.
+	 *
+	 * Similarly, we would need to be able to pull down CKE to
+	 * keep the DDR in Self refresh.
+	 * The pull down enabled on CKE is a weak pull down, which
+	 * is not enough to overcome the VTT pull up to 0.75V.
+	 * Thus, the DDR never properly goes to self refresh.
+	 *
+	 * EVM-SK Rev 1.2, has an added external pull down on CKE
+	 * and the ability to disable VTT regulator via gpio to
+	 * address the above issues.
+	 */
+
 	ldr	r6, evm_id
 	cmp	r6, #EVM_SK
 	bne	no_gpio_toggle
@@ -196,6 +218,19 @@ wait_sc_\num:
 	ldr	r1, [r0, #OMAP4_GPIO_CLEARDATAOUT]
 	mov	r2, #(1 << 7)
 	str	r2, [r0, #OMAP4_GPIO_CLEARDATAOUT]
+
+	/* Disable GPIO0 for EVM_SK here */
+	ldr	r1, virt_gpio0_clkctrl
+	ldr	r2, [r1]
+	bic	r2, r2, #(3 << 0)
+	str	r2, [r1]
+
+	ldr	r1, virt_gpio0_clkctrl
+wait_gpio0_disable:
+	ldr	r2, [r1]
+	ldr	r3, module_disabled_val
+	cmp	r2, r3
+	bne	wait_gpio0_disable
 
 no_gpio_toggle:
 	/* Weak pull down for macro DATA0 */
@@ -418,6 +453,15 @@ poll_vtp_ready_abt3:
 	cmp	r6, #EVM_SK
 	bne	no_gpio_toggle2
 
+	/* Enable GPIO0 for EVM-SK here */
+	ldr	r1, virt_gpio0_clkctrl
+	mov	r2, #0x2
+	str	r2, [r1]
+wait_gpio0_enable:
+	ldr	r3, [r1]
+	cmp	r2, r3
+	bne	wait_gpio0_enable
+
 	/* Drive GPIO0_7 HIGH */
 	ldr	r0, gpio0_addr_virt
 	ldr	r1, [r0, #OMAP4_GPIO_SETDATAOUT]
@@ -595,6 +639,15 @@ poll_vtp_ready3:
 	ldr	r6, evm_id
 	cmp	r6, #EVM_SK
 	bne	no_gpio_toggle3
+
+	/* Enable GPIO0 for EVM-SK here */
+	ldr	r1, phys_gpio0_clkctrl
+	mov	r2, #0x2
+	str	r2, [r1]
+wait_gpio0_phys_enable:
+	ldr	r3, [r1]
+	cmp	r2, r3
+	bne	wait_gpio0_phys_enable
 
 	/* Drive GPIO0_7 HIGH */
 	ldr	r0, gpio0_phys_addr
@@ -785,6 +838,11 @@ virt_sram_ldo_addr:
 	.word	AM33XX_PRM_LDO_SRAM_MPU_CTRL
 phys_sram_ldo_addr:
 	.word	AM33XX_PRM_BASE + AM33XX_PRM_DEVICE_MOD + AM33XX_PRM_LDO_SRAM_MPU_CTRL_OFFSET
+
+virt_gpio0_clkctrl:
+	.word	AM33XX_CM_WKUP_GPIO0_CLKCTRL
+phys_gpio0_clkctrl:
+	.word	AM33XX_CM_BASE + AM33XX_CM_WKUP_MOD + AM33XX_CM_WKUP_GPIO0_CLKCTRL_OFFSET
 
 virt_emif_clkctrl:
 	.word	AM33XX_CM_PER_EMIF_CLKCTRL
