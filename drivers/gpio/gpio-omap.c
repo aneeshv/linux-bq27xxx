@@ -1200,6 +1200,7 @@ static int __devinit omap_gpio_probe(struct platform_device *pdev)
 	bank->stride = pdata->bank_stride;
 	bank->width = pdata->bank_width;
 	bank->loses_context = pdata->loses_context;
+	bank->get_context_loss_count = pdata->get_context_loss_count;
 	bank->regs = pdata->regs;
 
 	if (bank->regs->set_dataout && bank->regs->clr_dataout)
@@ -1228,9 +1229,6 @@ static int __devinit omap_gpio_probe(struct platform_device *pdev)
 	omap_gpio_mod_init(bank, id);
 	omap_gpio_chip_init(bank);
 	omap_gpio_show_rev(bank);
-
-	if (bank->loses_context)
-		bank->get_context_loss_count = pdata->get_context_loss_count;
 
 	if (!gpio_init_done)
 		gpio_init_done = 1;
