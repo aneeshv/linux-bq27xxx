@@ -97,13 +97,51 @@ static int evm_spdif_hw_params(struct snd_pcm_substream *substream,
 	/* set cpu DAI configuration */
 	return snd_soc_dai_set_fmt(cpu_dai, AUDIO_FORMAT);
 }
+static int am335xevm_wl1271bt_pcm_hw_params(struct snd_pcm_substream *substream,
+				struct snd_pcm_hw_params *params)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	int ret;
+	unsigned sysclk;
 
+	/* Set cpu DAI configuration for WL1271 Bluetooth codec */
+	ret = snd_soc_dai_set_fmt(cpu_dai,
+			SND_SOC_DAIFMT_DSP_B |
+			SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_CBS_CFS);
+	if (ret < 0) {
+		printk(KERN_ERR "Can't set dai  configuration for "\
+				"WL1271 Bluetooth codec\n");
+		return ret;
+	}
+
+	/* set the codec system clock */
+	ret = snd_soc_dai_set_sysclk(cpu_dai, 0, sysclk, SND_SOC_CLOCK_OUT);
+	if (ret < 0) {
+		printk(KERN_ERR "Can't set sysclk  configuration \n");
+		return ret;
+	}
+
+	/* set the codec system clock */
+	ret = snd_soc_dai_set_clkdiv(cpu_dai, 0,94);
+	if (ret < 0) {
+		printk(KERN_ERR "Can't set sysclk  divider configuration \n");
+		return ret;
+	}
+
+	return 0;
+}
+static struct snd_soc_ops am335xevm_wl1271bt_pcm_ops = {
+	.hw_params = am335xevm_wl1271bt_pcm_hw_params,
+};
 static struct snd_soc_ops evm_ops = {
-	.hw_params = evm_hw_params,
+		.hw_params = evm_hw_params,
 };
 
 static struct snd_soc_ops evm_spdif_ops = {
-	.hw_params = evm_spdif_hw_params,
+		.hw_params = evm_spdif_hw_params,
 };
 
 /* davinci-evm machine dapm widgets */
@@ -249,15 +287,26 @@ static struct snd_soc_dai_link da850_evm_dai = {
 	.ops = &evm_ops,
 };
 
-static struct snd_soc_dai_link am335x_evm_dai = {
-	.name = "TLV320AIC3X",
-	.stream_name = "AIC3X",
-	.cpu_dai_name = "davinci-mcasp.1",
-	.codec_dai_name = "tlv320aic3x-hifi",
-	.codec_name = "tlv320aic3x-codec.2-001b",
-	.platform_name = "davinci-pcm-audio",
-	.init = evm_aic3x_init,
-	.ops = &evm_ops,
+static struct snd_soc_dai_link am335x_evm_dai[] = {
+	{
+		.name = "TLV320AIC3X",
+		.stream_name = "AIC3X",
+		.cpu_dai_name = "davinci-mcasp.1",
+		.codec_dai_name = "tlv320aic3x-hifi",
+		.codec_name = "tlv320aic3x-codec.2-001b",
+		.platform_name = "davinci-pcm-audio",
+		.init = evm_aic3x_init,
+		.ops = &evm_ops,
+	},
+	{
+		.name       = "WL1271BT",
+		.stream_name    = "WL1271BT",
+		.cpu_dai_name   = "davinci-mcasp.0",
+		.codec_dai_name = "wl1271bt",
+		.platform_name  = "davinci-pcm-audio",
+		.codec_name = "wl1271bt-dummy-codec",
+		.ops    = &am335xevm_wl1271bt_pcm_ops,
+	},
 };
 
 static struct snd_soc_dai_link am335x_evm_sk_dai = {
@@ -313,8 +362,8 @@ static struct snd_soc_card da850_snd_soc_card = {
 
 static struct snd_soc_card am335x_snd_soc_card = {
 	.name = "AM335X EVM",
-	.dai_link = &am335x_evm_dai,
-	.num_links = 1,
+	.dai_link = am335x_evm_dai,
+	.num_links =ARRAY_SIZE(am335x_evm_dai),
 };
 
 static struct snd_soc_card am335x_evm_sk_snd_soc_card = {
