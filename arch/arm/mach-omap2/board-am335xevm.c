@@ -78,6 +78,7 @@
 #include "devices.h"
 #include "hsmmc.h"
 
+#include "control.h"
 /* Convert GPIO signal to GPIO pin number */
 #define GPIO_TO_PIN(bank, gpio) (32 * (bank) + (gpio))
 
@@ -315,6 +316,12 @@ static u8 am335x_iis_serializer_direction1[] = {
 	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,
 };
 
+static u8 am335x_iis_serializer_direction0[] = {
+    TX_MODE,  RX_MODE,  INACTIVE_MODE,    INACTIVE_MODE,
+    INACTIVE_MODE,  INACTIVE_MODE,  INACTIVE_MODE,  INACTIVE_MODE,
+    INACTIVE_MODE,  INACTIVE_MODE,  INACTIVE_MODE,  INACTIVE_MODE,
+    INACTIVE_MODE,  INACTIVE_MODE,  INACTIVE_MODE,  INACTIVE_MODE,
+};
 static struct snd_platform_data am335x_evm_snd_data1 = {
 	.tx_dma_offset	= 0x46400000,	/* McASP1 */
 	.rx_dma_offset	= 0x46400000,
@@ -328,6 +335,19 @@ static struct snd_platform_data am335x_evm_snd_data1 = {
 	.rxnumevt	= 32,
 	.get_context_loss_count	=
 			omap_pm_get_dev_context_loss_count,
+};
+
+static struct snd_platform_data am335x_evm_snd_data0 = {
+    .tx_dma_offset  = 0x46000000,   /* McASP0 */
+    .rx_dma_offset  = 0x46000000,
+    .op_mode    = DAVINCI_MCASP_IIS_MODE,
+    .num_serializer = ARRAY_SIZE(am335x_iis_serializer_direction0),
+    .tdm_slots  = 2,
+    .serial_dir = am335x_iis_serializer_direction0,
+    .asp_chan_q = EVENTQ_2,
+    .version    = MCASP_VERSION_3,
+    .txnumevt   = 1,
+    .rxnumevt   = 1,
 };
 
 static u8 am335x_evm_sk_iis_serializer_direction1[] = {
@@ -351,6 +371,17 @@ static struct snd_platform_data am335x_evm_sk_snd_data1 = {
 			omap_pm_get_dev_context_loss_count,
 };
 
+static struct snd_platform_data am335x_evm_sk_snd_data0 = {
+    .tx_dma_offset  = 0x46000000,   /* McASP1 */
+    /*.rx_dma_offset    = 0x46400000,*/
+    .op_mode    = DAVINCI_MCASP_IIS_MODE,
+    .num_serializer = ARRAY_SIZE(am335x_evm_sk_iis_serializer_direction1),
+    .tdm_slots  = 2,
+    .serial_dir = am335x_evm_sk_iis_serializer_direction1,
+    .asp_chan_q = EVENTQ_2,
+    .version    = MCASP_VERSION_3,
+    .txnumevt   = 1,
+};
 static struct omap2_hsmmc_info am335x_mmc[] __initdata = {
 	{
 		.mmc            = 1,
@@ -882,6 +913,16 @@ static struct pinmux_config mcasp1_pin_mux[] = {
 	{"rmii1_refclk.mcasp1_axr3", OMAP_MUX_MODE4 |
 						AM33XX_PIN_INPUT_PULLDOWN},
 	{NULL, 0},
+};
+
+/* Module pin mux for mcasp1 */
+static struct pinmux_config mcasp0_pin_mux[] = {
+    {"mcasp0_aclkx.mcasp0_aclkx", OMAP_MUX_MODE0 |AM33XX_PIN_INPUT_PULLDOWN },
+    {"mcasp0_fsx.mcasp0_fsx", OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLDOWN },
+    {"mcasp0_axr0.mcasp0_axr0", OMAP_MUX_MODE0 |AM33XX_PIN_OUTPUT_PULLUP },
+    {"mcasp0_axr1.mcasp0_axr1", OMAP_MUX_MODE0 |AM33XX_PIN_INPUT_PULLUP
+                        },
+    {NULL, 0},
 };
 
 
@@ -2456,6 +2497,22 @@ static void i2c2_init(int evm_id, int profile)
 }
 
 /* Setup McASP 1 */
+static void mcasp0_init(int evm_id, int profile)
+{
+    /* Configure McASP */
+    setup_pin_mux(mcasp0_pin_mux);
+    switch (evm_id) {
+    case EVM_SK:
+        am335x_register_mcasp(&am335x_evm_sk_snd_data0, 0);
+        break;
+    default:
+        am335x_register_mcasp(&am335x_evm_snd_data0, 0);
+    }
+
+    return;
+}
+
+/* Setup McASP 1 */
 static void mcasp1_init(int evm_id, int profile)
 {
 	/* Configure McASP */
@@ -2617,6 +2674,12 @@ static inline void __init am335xevm_init_btwilink(void)
 }
 #endif
 
+/* WL1271 Audio */
+static struct platform_device wl1271bt_codec_device = {
+	.name		= "wl1271bt-dummy-codec",
+	.id		= -1,
+};
+
 static void wl12xx_bluetooth_enable(void)
 {
 #ifndef CONFIG_TI_ST
@@ -2630,6 +2693,7 @@ static void wl12xx_bluetooth_enable(void)
 #else
 	am335xevm_init_btwilink();
 #endif
+	 platform_device_register(&wl1271bt_codec_device);
 }
 
 static int wl12xx_set_power(struct device *dev, int slot, int on, int vdd)
@@ -3034,6 +3098,7 @@ static struct evm_dev_cfg gen_purp_evm_dev_cfg[] = {
 	{i2c1_init,     DEV_ON_DGHTR_BRD, (PROFILE_ALL & ~PROFILE_2)},
 	{lis331dlh_init, DEV_ON_DGHTR_BRD, (PROFILE_ALL & ~PROFILE_2)},
 	{mcasp1_init,	DEV_ON_DGHTR_BRD, (PROFILE_0 | PROFILE_3 | PROFILE_7)},
+	{mcasp0_init,	DEV_ON_BASEBOARD, (PROFILE_ALL)},
 	{mmc1_init,	DEV_ON_DGHTR_BRD, PROFILE_2},
 	{mmc2_wl12xx_init,	DEV_ON_BASEBOARD, (PROFILE_0 | PROFILE_3 |
 								PROFILE_5)},
