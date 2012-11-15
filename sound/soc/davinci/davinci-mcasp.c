@@ -523,6 +523,9 @@ static int davinci_mcasp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 				case SND_SOC_DAIFMT_AC97:
 						mcasp_clr_bits(dev->base+DAVINCI_MCASP_TXFMCTL_REG, FSXDUR);
 						mcasp_clr_bits(dev->base+DAVINCI_MCASP_RXFMCTL_REG, FSRDUR);
+
+				       /* make 1st data bit occur one ACLK cycle after the frame sync */
+						mcasp_set_bits(dev->base+DAVINCI_MCASP_RXFMT_REG, FSRDLY(1));
 						break;
 				default:
 						/* configure a full-word SYNC pulse (LRCLK) */
