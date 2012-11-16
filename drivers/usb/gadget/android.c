@@ -964,8 +964,6 @@ static int android_bind(struct usb_composite_dev *cdev)
 	struct usb_gadget	*gadget = cdev->gadget;
 	int			gcnum, id, ret;
 
-	usb_gadget_disconnect(gadget);
-
 	ret = android_init_functions(dev->functions, cdev);
 	if (ret)
 		return ret;
