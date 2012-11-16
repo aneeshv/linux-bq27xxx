@@ -1904,6 +1904,12 @@ finish:
 	urb->actual_length += xfer_len;
 	qh->offset += xfer_len;
 	if (done) {
+		/* Reset this dma ->actual_len after transfer complete,
+		 * if not subsequence dequeue request will take this
+		 */
+		if (dma)
+			dma->actual_len = 0;
+
 		if (urb->status == -EINPROGRESS) {
 			/* If short packet is not expected any transfer length
 			 * less than actual length is an error, hence
