@@ -716,6 +716,7 @@ static struct ale_control_info ale_controls[] = {
 	[ALE_ENABLE]		= CTRL_GLOBAL(enable, 31),
 	[ALE_CLEAR]		= CTRL_GLOBAL(clear, 30),
 	[ALE_AGEOUT]		= CTRL_GLOBAL(ageout, 29),
+	[ALE_P0_UNI_FLOOD]	= CTRL_GLOBAL(p0_uni_flood, 8),
 	[ALE_VLAN_NOLEARN]	= CTRL_GLOBAL(vlan_nolearn, 7),
 	[ALE_NO_PORT_VLAN]	= CTRL_GLOBAL(no_port_vlan, 6),
 	[ALE_OUI_DENY]		= CTRL_GLOBAL(oui_deny, 5),
@@ -729,6 +730,7 @@ static struct ale_control_info ale_controls[] = {
 	[ALE_PORT_DROP_UNTAGGED]     = CTRL_PORTCTL(drop_untagged, 2, 1),
 	[ALE_PORT_DROP_UNKNOWN_VLAN] = CTRL_PORTCTL(drop_unknown, 3, 1),
 	[ALE_PORT_NOLEARN]	     = CTRL_PORTCTL(nolearn, 4, 1),
+	[ALE_PORT_NO_SA_UPDATE]	     = CTRL_PORTCTL(nolearn, 5, 1),
 	[ALE_PORT_MCAST_LIMIT]	     = CTRL_PORTCTL(mcast_limit, 16, 8),
 	[ALE_PORT_BCAST_LIMIT]	     = CTRL_PORTCTL(bcast_limit, 24, 8),
 

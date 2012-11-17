@@ -361,6 +361,41 @@ static void cpsw_ndo_set_rx_mode(struct net_device *ndev)
 	}
 }
 
+static void cpsw_ndo_change_rx_flags(struct net_device *ndev, int flags)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+	struct cpsw_ale *ale = priv->ale;
+
+	if (flags & IFF_PROMISC) {
+		if ((priv->slaves[0].ndev->flags & IFF_PROMISC) ||
+				(priv->slaves[1].ndev->flags & IFF_PROMISC)) {
+			/*
+			 * Enabling promiscuous mode for one interface will be
+			 * common for both the interface as the interface
+			 * shares the same hardware resource.
+			 */
+
+			/* Enable Bypass */
+			cpsw_ale_control_set(ale, 0, ALE_BYPASS, 1);
+
+			dev_err(&ndev->dev, "promiscuity enabled\n");
+		} else {
+			/* Disable Bypass */
+			cpsw_ale_control_set(ale, 0, ALE_BYPASS, 0);
+			dev_err(&ndev->dev, "promiscuity disabled\n");
+		}
+	}
+
+	/*
+	 * The switch cannot filter multicast traffic unless it is configured
+	 * in "VLAN Aware" mode.  Unfortunately, VLAN awareness requires a
+	 * whole bunch of additional logic that this driver does not implement
+	 * at present.
+	 */
+	if ((flags & IFF_ALLMULTI) && !(ndev->flags & IFF_ALLMULTI))
+		dev_err(&ndev->dev, "multicast traffic cannot be filtered!\n");
+}
+
 static inline void cpsw_p0_fifo_type_select(struct cpsw_priv *priv)
 {
 	u32 reg;
@@ -433,6 +468,67 @@ static void cpsw_ndo_set_rx_mode(struct net_device *ndev)
 				ALE_ALL_PORTS << priv->host_port, 0, 0);
 		}
 	}
+}
+
+static void cpsw_ndo_change_rx_flags(struct net_device *ndev, int flags)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+	struct cpsw_ale *ale = priv->ale;
+	int i;
+
+	if (flags & IFF_PROMISC) {
+		if (ndev->flags & IFF_PROMISC) {
+			unsigned long timeout = jiffies + HZ;
+
+			/* Disable Learn for all ports */
+			for (i = 0; i <= priv->data.slaves; i++) {
+				cpsw_ale_control_set(ale, i,
+						     ALE_PORT_NOLEARN, 1);
+				cpsw_ale_control_set(ale, i,
+						     ALE_PORT_NO_SA_UPDATE, 1);
+			}
+
+			/* Clear All Untouched entries */
+			cpsw_ale_control_set(ale, 0, ALE_AGEOUT, 1);
+			do {
+				cpu_relax();
+				if (cpsw_ale_control_get(ale, 0, ALE_AGEOUT))
+					break;
+			} while (time_after(timeout, jiffies));
+			cpsw_ale_control_set(ale, 0, ALE_AGEOUT, 1);
+
+			/* Clear all mcast from ALE */
+			cpsw_ale_flush_multicast(ale,
+					ALE_ALL_PORTS << priv->host_port);
+
+			/* Flood All Unicast Packets to Host port */
+			cpsw_ale_control_set(ale, 0, ALE_P0_UNI_FLOOD, 1);
+			dev_err(&ndev->dev, "promiscuity enabled\n");
+		} else {
+			/* Flood All Unicast Packets to Host port */
+			cpsw_ale_control_set(ale, 0, ALE_P0_UNI_FLOOD, 0);
+
+			/* Enable Learn for all ports */
+			for (i = 0; i <= priv->data.slaves; i++) {
+				cpsw_ale_control_set(ale, i,
+						     ALE_PORT_NOLEARN, 0);
+				cpsw_ale_control_set(ale, i,
+						     ALE_PORT_NO_SA_UPDATE, 0);
+			}
+
+			cpsw_ndo_set_rx_mode(ndev);
+			dev_err(&ndev->dev, "promiscuity disabled\n");
+		}
+	}
+
+	/*
+	 * The switch cannot filter multicast traffic unless it is configured
+	 * in "VLAN Aware" mode.  Unfortunately, VLAN awareness requires a
+	 * whole bunch of additional logic that this driver does not implement
+	 * at present.
+	 */
+	if ((flags & IFF_ALLMULTI) && !(ndev->flags & IFF_ALLMULTI))
+		dev_err(&ndev->dev, "multicast traffic cannot be filtered!\n");
 }
 
 #define cpsw_p0_fifo_type_select(priv)
@@ -1776,29 +1872,6 @@ static int cpsw_ndo_do_ioctl(struct net_device *ndev, struct ifreq *ifrq,
 		return -EOPNOTSUPP;
 	}
 	return 0;
-}
-
-static void cpsw_ndo_change_rx_flags(struct net_device *ndev, int flags)
-{
-	/*
-	 * The switch cannot operate in promiscuous mode without substantial
-	 * headache.  For promiscuous mode to work, we would need to put the
-	 * ALE in bypass mode and route all traffic to the host port.
-	 * Subsequently, the host will need to operate as a "bridge", learn,
-	 * and flood as needed.  For now, we simply complain here and
-	 * do nothing about it :-)
-	 */
-	if ((flags & IFF_PROMISC) && (ndev->flags & IFF_PROMISC))
-		dev_err(&ndev->dev, "promiscuity ignored!\n");
-
-	/*
-	 * The switch cannot filter multicast traffic unless it is configured
-	 * in "VLAN Aware" mode.  Unfortunately, VLAN awareness requires a
-	 * whole bunch of additional logic that this driver does not implement
-	 * at present.
-	 */
-	if ((flags & IFF_ALLMULTI) && !(ndev->flags & IFF_ALLMULTI))
-		dev_err(&ndev->dev, "multicast traffic cannot be filtered!\n");
 }
 
 static int cpsw_ndo_set_mac_address(struct net_device *ndev, void *p)
