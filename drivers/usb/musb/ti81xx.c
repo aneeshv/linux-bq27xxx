@@ -714,18 +714,24 @@ static void otg_timer(unsigned long _musb)
 		devctl = musb_readb(mregs, MUSB_DEVCTL);
 		if (devctl & MUSB_DEVCTL_HM) {
 			musb->xceiv->state = OTG_STATE_A_IDLE;
-		} else if ((devctl & MUSB_DEVCTL_SESSION) &&
-				!(devctl & MUSB_DEVCTL_BDEVICE)) {
-			mod_timer(&musb->otg_workaround,
-					jiffies + POLL_SECONDS * HZ);
-			musb_writeb(musb->mregs, MUSB_DEVCTL, devctl &
-				~MUSB_DEVCTL_SESSION);
-		} else {
-			mod_timer(&musb->otg_workaround,
-					jiffies + POLL_SECONDS * HZ);
-			musb_writeb(musb->mregs, MUSB_DEVCTL, devctl |
-				MUSB_DEVCTL_SESSION);
+			break;
 		}
+
+		/* don't toggle SESSION flag if VBUS presents - connected
+		 * to Host already
+		 */
+		if ((devctl & MUSB_DEVCTL_VBUS) == MUSB_DEVCTL_VBUS)
+			break;
+
+		if ((devctl & MUSB_DEVCTL_SESSION) &&
+				!(devctl & MUSB_DEVCTL_BDEVICE))
+			devctl &= ~MUSB_DEVCTL_SESSION;
+		else
+			devctl |= MUSB_DEVCTL_SESSION;
+
+		mod_timer(&musb->otg_workaround,
+				jiffies + POLL_SECONDS * HZ);
+		musb_writeb(musb->mregs, MUSB_DEVCTL, devctl);
 		break;
 	default:
 		break;
