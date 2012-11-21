@@ -2814,40 +2814,17 @@ static void profibus_init(int evm_id, int profile)
 	return;
 }
 
-static struct resource am335x_rtc_resources[] = {
-	{
-		.start		= AM33XX_RTC_BASE,
-		.end		= AM33XX_RTC_BASE + SZ_4K - 1,
-		.flags		= IORESOURCE_MEM,
-	},
-	{ /* timer irq */
-		.start		= AM33XX_IRQ_RTC_TIMER,
-		.end		= AM33XX_IRQ_RTC_TIMER,
-		.flags		= IORESOURCE_IRQ,
-	},
-	{ /* alarm irq */
-		.start		= AM33XX_IRQ_RTC_ALARM,
-		.end		= AM33XX_IRQ_RTC_ALARM,
-		.flags		= IORESOURCE_IRQ,
-	},
-};
-
 static struct omap_rtc_pdata am335x_rtc_info = {
-	.pm_off		= true,
-};
-
-static struct platform_device am335x_rtc_device = {
-	.name           = "omap_rtc",
-	.id             = -1,
-	.num_resources	= ARRAY_SIZE(am335x_rtc_resources),
-	.resource	= am335x_rtc_resources,
+	.pm_off		= false,
 };
 
 static void am335x_rtc_init(int evm_id, int profile)
 {
 	void __iomem *base;
 	struct clk *clk;
-	int ret;
+	struct omap_hwmod *oh;
+	struct platform_device *pdev;
+	char *dev_name = "am33xx-rtc";
 
 	clk = clk_get(NULL, "rtc_fck");
 	if (IS_ERR(clk)) {
@@ -2882,15 +2859,22 @@ static void am335x_rtc_init(int evm_id, int profile)
 	switch (evm_id) {
 	case BEAGLE_BONE_A3:
 	case BEAGLE_BONE_OLD:
-		am335x_rtc_device.dev.platform_data = &am335x_rtc_info;
+		am335x_rtc_info.pm_off = true;
 		break;
 	default:
 		break;
 	}
 
-	ret = platform_device_register(&am335x_rtc_device);
-	if (ret)
-		pr_err("%s: failed to register rtc device\n", __func__);
+	oh = omap_hwmod_lookup("rtc");
+	if (!oh) {
+		pr_err("could not look up %s\n", "rtc");
+		return;
+	}
+
+	pdev = omap_device_build(dev_name, -1, oh, &am335x_rtc_info,
+			sizeof(struct omap_rtc_pdata), NULL, 0, 0);
+	WARN(IS_ERR(pdev), "Can't build omap_device for %s:%s.\n",
+			dev_name, oh->name);
 }
 
 /* Enable clkout2 */
