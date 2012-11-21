@@ -186,53 +186,6 @@ wait_sc_\num:
 
 	ddr_self_refresh	1
 
-	 /*
-	 * Disable VTT_Regulator on EVM-SK
-	 *
-	 * Explanation from Hardware team :
-	 * On EVM-SK, the CKE signal does not properly go low
-	 * during DDR self refresh because of two issues:
-	 * 1.Because of a bug in the silicon, we have to disable VTP
-	 * in order to get to a low power state.
-	 * 2.As a consequence of #1, none of the ctrl/addr outputs
-	 * are driven by the EMIF/PHY.
-	 * This is why we have to enable a pull up on DDR_RESET.
-	 *
-	 * Similarly, we would need to be able to pull down CKE to
-	 * keep the DDR in Self refresh.
-	 * The pull down enabled on CKE is a weak pull down, which
-	 * is not enough to overcome the VTT pull up to 0.75V.
-	 * Thus, the DDR never properly goes to self refresh.
-	 *
-	 * EVM-SK Rev 1.2, has an added external pull down on CKE
-	 * and the ability to disable VTT regulator via gpio to
-	 * address the above issues.
-	 */
-
-	ldr	r6, evm_id
-	cmp	r6, #EVM_SK
-	bne	no_gpio_toggle
-
-	/* Drive GPIO0_7 LOW */
-	ldr	r0, gpio0_addr_virt
-	ldr	r1, [r0, #OMAP4_GPIO_CLEARDATAOUT]
-	mov	r2, #(1 << 7)
-	str	r2, [r0, #OMAP4_GPIO_CLEARDATAOUT]
-
-	/* Disable GPIO0 for EVM_SK here */
-	ldr	r1, virt_gpio0_clkctrl
-	ldr	r2, [r1]
-	bic	r2, r2, #(3 << 0)
-	str	r2, [r1]
-
-	ldr	r1, virt_gpio0_clkctrl
-wait_gpio0_disable:
-	ldr	r2, [r1]
-	ldr	r3, module_disabled_val
-	cmp	r2, r3
-	bne	wait_gpio0_disable
-
-no_gpio_toggle:
 	/* Weak pull down for macro DATA0 */
 	ldr	r1, virt_ddr_data0_ioctrl
 	ldr	r2, susp_io_pull_data
@@ -261,11 +214,46 @@ no_gpio_toggle:
 	ldr	r2, susp_io_pull_cmd2
 	str	r2, [r1]
 
-	/* Disable VTP */
-	ldr	r1, virt_ddr_vtp_ctrl
-	ldr	r2, susp_vtp_ctrl_val
+	/*
+	 * Disable VTT_Regulator on EVM-SK
+	 *
+	 * Explanation from Hardware team :
+	 * On EVM-SK, the CKE signal does not properly go low during DDR self refresh because of two issues:
+	 * 1.Because of a bug in the silicon, we have to disable VTP in order to get to a low power state.
+	 * 2.As a consequence of #1, none of the ctrl/addr outputs are driven by the EMIF/PHY.
+	 * This is why we have to enable a pull up on DDR_RESET.
+	 * Similarly, we would need to be able to pull down CKE to keep the DDR in Self refresh.
+	 * The pull down enabled on CKE is a weak pull down, which is not enough to overcome the
+	 * VTT pull up to 0.75V.  Thus, the DDR never properly goes to self refresh.
+	 *
+	 * EVM-SK Rev 1.2, has an added external pull down on CKE and the ability to disable
+	 * VTT regulator via gpio to address the above issues.
+	 */
+
+	ldr	r6, evm_id
+	cmp	r6, #EVM_SK
+	bne	no_gpio_toggle
+
+	/* Drive GPIO0_7 LOW */
+	ldr	r0, gpio0_addr_virt
+	ldr	r1, [r0, #OMAP4_GPIO_CLEARDATAOUT]
+	mov	r2, #(1 << 7)
+	str	r2, [r0, #OMAP4_GPIO_CLEARDATAOUT]
+
+	/* Disable GPIO0 for EVM_SK here */
+	ldr	r1, virt_gpio0_clkctrl
+	ldr	r2, [r1]
+	bic	r2, r2, #(3 << 0)
 	str	r2, [r1]
 
+	ldr	r1, virt_gpio0_clkctrl
+wait_gpio0_disable:
+	ldr	r2, [r1]
+	ldr	r3, module_disabled_val
+	cmp	r2, r3
+	bne	wait_gpio0_disable
+
+no_gpio_toggle:
 	/* Put IO in mDDR (cmos) mode */
 	ldr	r0, virt_ddr_io_ctrl
 	ldr	r1, [r0]
@@ -285,6 +273,11 @@ wait_emif_disable3:
 	ldr	r3, module_disabled_val
 	cmp	r2, r3
 	bne	wait_emif_disable3
+
+	/* Disable VTP */
+	ldr	r1, virt_ddr_vtp_ctrl
+	ldr	r2, susp_vtp_ctrl_val
+	str	r2, [r1]
 
 	/* Enable SRAM LDO ret mode */
 	ldr	r0, virt_sram_ldo_addr
@@ -425,23 +418,23 @@ poll_vtp_ready_abt3:
 	tst	r1, #(1 << 5)
 	beq	poll_vtp_ready_abt3
 
-	/*	Disable the pull for CMD2 */
+	/* Disable the pull for CMD2 */
 	ldr	r1, virt_ddr_cmd2_ioctrl
 	ldr	r2, resume_io_pull_cmd
 	str	r2, [r1]
-	/*	Disable the pull for CMD1 */
+	/* Disable the pull for CMD1 */
 	ldr	r1, virt_ddr_cmd1_ioctrl
 	ldr	r2, resume_io_pull_cmd
 	str	r2, [r1]
-	/*	Disable the pull for CMD0 */
+	/* Disable the pull for CMD0 */
 	ldr	r1, virt_ddr_cmd0_ioctrl
 	ldr	r2, resume_io_pull_cmd
 	str	r2, [r1]
-	/*	Disable the pull for DATA1 */
+	/* Disable the pull for DATA1 */
 	ldr	r1, virt_ddr_data1_ioctrl
 	ldr	r2, resume_io_pull_data
 	str	r2, [r1]
-	/*	Disable the pull for DATA0 */
+	/* Disable the pull for DATA0 */
 	ldr	r1, virt_ddr_data0_ioctrl
 	ldr	r2, resume_io_pull_data
 	str	r2, [r1]
@@ -469,7 +462,21 @@ wait_gpio0_enable:
 	str	r2, [r0, #OMAP4_GPIO_SETDATAOUT]
 
 no_gpio_toggle2:
-	b	emif_self_refresh_dis
+	/* Disable EMIF self-refresh */
+	ldr	r0, emif_addr_virt
+	add	r0, r0, #EMIF4_0_SDRAM_MGMT_CTRL
+	ldr	r1, [r0]
+	bic	r1, r1, #(0x7 << 8)
+	str	r1, [r0]
+	str	r1, [r0, #4]
+
+	/* For DDR3, make DDR_RESET low via control module */
+	ldr	r0, virt_ddr_io_ctrl
+	ldr	r1, [r0]
+	bic	r1, r1, #(1 << 31)
+	str	r1, [r0]
+
+	b	return_to_ddr_abt
 
 	/* DDR2 resume path */
 ddr2_resume_seq_abt:
@@ -543,16 +550,17 @@ emif_self_refresh_dis:
  * an init sequence and hence it must be done
  * at the end
  */
-	ldr r0, emif_addr_virt
-	add r0, r0, #EMIF4_0_SDRAM_CONFIG
-	ldr r4, emif_sdcfg_val
-	str r4, [r0]
+	ldr r0,	emif_addr_virt
+	add r0,	r0, #EMIF4_0_SDRAM_CONFIG
+	ldr r4,	emif_sdcfg_val
+	str r4,	[r0]
 
-	mov r0, #0x2000
+	mov r0,	#0x2000
 wait_loop4:
-	subs   r0, r0, #1
-	bne wait_loop4
+	subs	r0, r0, #1
+	bne	wait_loop4
 
+return_to_ddr_abt:
 	mov	r0, #7
 	ldmfd	sp!, {r4 - r11, pc}	@ restore regs and return
 
@@ -612,23 +620,23 @@ poll_vtp_ready3:
 	tst	r1, #(1 << 5)
 	beq	poll_vtp_ready3
 
-	/*	Disable the pull for CMD2 */
+	/* Disable the pull for CMD2 */
 	ldr	r1, phys_ddr_cmd2_ioctrl
 	ldr	r2, resume_io_pull_cmd
 	str	r2, [r1]
-	/*	Disable the pull for CMD1 */
+	/* Disable the pull for CMD1 */
 	ldr	r1, phys_ddr_cmd1_ioctrl
 	ldr	r2, resume_io_pull_cmd
 	str	r2, [r1]
-	/*	Disable the pull for CMD0 */
+	/* Disable the pull for CMD0 */
 	ldr	r1, phys_ddr_cmd0_ioctrl
 	ldr	r2, resume_io_pull_cmd
 	str	r2, [r1]
-	/*	Disable the pull for DATA1 */
+	/* Disable the pull for DATA1 */
 	ldr	r1, phys_ddr_data1_ioctrl
 	ldr	r2, resume_io_pull_data
 	str	r2, [r1]
-	/*	Disable the pull for DATA0 */
+	/* Disable the pull for DATA0 */
 	ldr	r1, phys_ddr_data0_ioctrl
 	ldr	r2, resume_io_pull_data
 	str	r2, [r1]
@@ -745,15 +753,29 @@ zqcfg:
 	ldr	r4, emif_zqcfg_val
 	str	r4, [r3, #EMIF4_0_ZQ_CONFIG]
 
+	/* Write to SDRAM_CONFIG only for DDR2 */
+	ldr	r6, mem_type
+	cmp	r6, #MEM_TYPE_DDR2
+	beq	ddr2_sdcfg
+
+	/* For DDR3, make DDR_RESET low via control module */
+	ldr	r0, phys_ddr_io_ctrl
+	ldr	r1, [r0]
+	bic	r1, r1, #(1 << 31)
+	str	r1, [r0]
+
+	b	return_to_ddr
+
 	/*
 	 * A write to SDRAM CONFIG register triggers
 	 * an init sequence and hence it must be done
-	 * at the end
+	 * at the end for DDR2
 	 */
-sdcfg:
+ddr2_sdcfg:
 	ldr	r4, emif_sdcfg_val
 	str	r4, [r3, #EMIF4_0_SDRAM_CONFIG]
 
+return_to_ddr:
 	/* Back from la-la-land. Kill some time for sanity to settle in */
 	mov	r0, #0x1000
 wait_loop2:
