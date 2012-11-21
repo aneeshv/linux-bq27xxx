@@ -2865,6 +2865,9 @@ static void am335x_rtc_init(int evm_id, int profile)
 		break;
 	}
 
+	clk_disable(clk);
+	clk_put(clk);
+
 	oh = omap_hwmod_lookup("rtc");
 	if (!oh) {
 		pr_err("could not look up %s\n", "rtc");
