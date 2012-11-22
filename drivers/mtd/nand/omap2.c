@@ -935,9 +935,18 @@ static int omap_correct_data(struct mtd_info *mtd, u_char *dat,
 
 				bit_pos   = err_loc[j] % 8;
 				byte_pos  = (BCH8_ECC_MAX - err_loc[j] - 1) / 8;
-				if (err_loc[j] < BCH8_ECC_MAX)
-					dat[byte_pos] ^=
+				if (err_loc[j] < BCH8_ECC_MAX) {
+					/*
+					 * Check bit flip error reported in data
+					 * area, if yes correct bit flip, else
+					 * bit flip in OOB area.
+					 */
+					if (byte_pos < 512)
+						dat[byte_pos] ^= 1 << bit_pos;
+					else
+						read_ecc[byte_pos - 512] ^=
 							1 << bit_pos;
+				}
 				/* else, not interested to correct ecc */
 			}
 
