@@ -21,8 +21,10 @@
  *
  * @pm_off:		Flag to specify whether the RTC is incharge of
  *			controlling the system/device power.
+ * @wakeup_capable:	module supports wakeup from suspend with alarm events
  */
 struct omap_rtc_pdata {
 	bool pm_off;
+	unsigned wakeup_capable:1;
 };
 #endif

@@ -40,6 +40,8 @@
  * the SoC). See the BOARD-SPECIFIC CUSTOMIZATION comment.
  */
 
+#define DRIVER_NAME			"omap_rtc"
+
 #define OMAP_RTC_BASE			0xfffb4800
 
 /* RTC registers */
@@ -74,6 +76,8 @@
 #define OMAP_RTC_ALARM2_YEARS_REG	0x94
 #define OMAP_RTC_PMIC_REG		0x98
 
+#define OMAP_RTC_IRQWAKEEN		0x7C
+
 /* OMAP_RTC_CTRL_REG bit fields: */
 #define OMAP_RTC_CTRL_SPLIT		(1<<7)
 #define OMAP_RTC_CTRL_DISABLE		(1<<6)
@@ -106,6 +110,15 @@
 #define SECS_IN_MIN			60
 #define WAIT_AFTER			(SECS_IN_MIN - SHUTDOWN_TIME_SEC)
 #define WAIT_TIME_MS			(SHUTDOWN_TIME_SEC * 1000)
+
+/* OMAP_RTC_IRQWAKEEN bit fields: */
+#define OMAP_RTC_IRQWAKEEN_ALARM_WAKEEN    (1<<1)
+
+/*
+ * Few RTC IP revision has special WAKEEN Register to enable Wakeup
+ * generation for event Alarm.
+ */
+#define	OMAP_RTC_HAS_IRQWAKEEN		0x2
 
 static void __iomem	*rtc_base;
 
@@ -351,6 +364,17 @@ static struct rtc_class_ops omap_rtc_ops = {
 static int omap_rtc_alarm;
 static int omap_rtc_timer;
 
+static struct platform_device_id omap_rtc_devtype[] = {
+	{
+		.name	= DRIVER_NAME,
+	}, {
+		.name	= "am33xx-rtc",
+		.driver_data = OMAP_RTC_HAS_IRQWAKEEN,
+	},
+	{},
+};
+MODULE_DEVICE_TABLE(platform, omap_rtc_devtype);
+
 static int __init omap_rtc_probe(struct platform_device *pdev)
 {
 	struct omap_rtc_pdata	*pdata = pdev->dev.platform_data;
@@ -466,6 +490,9 @@ static int __init omap_rtc_probe(struct platform_device *pdev)
 	if (reg != new_ctrl)
 		rtc_write(new_ctrl, OMAP_RTC_CTRL_REG);
 
+	if (pdata->wakeup_capable)
+		device_init_wakeup(&pdev->dev, 1);
+
 	return 0;
 
 fail2:
@@ -513,16 +540,27 @@ static u8 irqstat;
 
 static int omap_rtc_suspend(struct platform_device *pdev, pm_message_t state)
 {
+	u8 irqwake_stat;
+	const struct platform_device_id *id_entry =
+				platform_get_device_id(pdev);
+
 	irqstat = rtc_read(OMAP_RTC_INTERRUPTS_REG);
 
 	/* FIXME the RTC alarm is not currently acting as a wakeup event
 	 * source, and in fact this enable() call is just saving a flag
 	 * that's never used...
 	 */
-	if (device_may_wakeup(&pdev->dev))
+	if (device_may_wakeup(&pdev->dev)) {
 		enable_irq_wake(omap_rtc_alarm);
-	else
+
+		if (id_entry->driver_data & OMAP_RTC_HAS_IRQWAKEEN) {
+			irqwake_stat = rtc_read(OMAP_RTC_IRQWAKEEN);
+			irqwake_stat |= OMAP_RTC_IRQWAKEEN_ALARM_WAKEEN;
+			rtc_write(irqwake_stat, OMAP_RTC_IRQWAKEEN);
+		}
+	} else {
 		rtc_write(0, OMAP_RTC_INTERRUPTS_REG);
+	}
 
 	/* Disable the clock/module */
 	pm_runtime_put_sync(&pdev->dev);
@@ -532,13 +570,24 @@ static int omap_rtc_suspend(struct platform_device *pdev, pm_message_t state)
 
 static int omap_rtc_resume(struct platform_device *pdev)
 {
+	u8 irqwake_stat;
+	const struct platform_device_id *id_entry =
+				platform_get_device_id(pdev);
+
 	/* Enable the clock/module so that we can access the registers */
 	pm_runtime_get_sync(&pdev->dev);
 
-	if (device_may_wakeup(&pdev->dev))
+	if (device_may_wakeup(&pdev->dev)) {
 		disable_irq_wake(omap_rtc_alarm);
-	else
+
+		if (id_entry->driver_data & OMAP_RTC_HAS_IRQWAKEEN) {
+			irqwake_stat = rtc_read(OMAP_RTC_IRQWAKEEN);
+			irqwake_stat &= ~OMAP_RTC_IRQWAKEEN_ALARM_WAKEEN;
+			rtc_write(irqwake_stat, OMAP_RTC_IRQWAKEEN);
+		}
+	} else {
 		rtc_write(irqstat, OMAP_RTC_INTERRUPTS_REG);
+	}
 	return 0;
 }
 
@@ -559,9 +608,10 @@ static struct platform_driver omap_rtc_driver = {
 	.resume		= omap_rtc_resume,
 	.shutdown	= omap_rtc_shutdown,
 	.driver		= {
-		.name	= "omap_rtc",
+		.name	= DRIVER_NAME,
 		.owner	= THIS_MODULE,
 	},
+	.id_table	= omap_rtc_devtype,
 };
 
 static int __init rtc_init(void)
