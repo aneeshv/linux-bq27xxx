@@ -930,6 +930,10 @@ static int omap_correct_data(struct mtd_info *mtd, u_char *dat,
 				count  = omap_elm_decode_bch_error(0, calc_ecc,
 						err_loc);
 
+			/* Uncorrectable error reported */
+			if (count < 0)
+				return count;
+
 			for (j = 0; j < count; j++) {
 				u32 bit_pos, byte_pos;
 
