@@ -1547,6 +1547,9 @@ static int __exit ti81xx_remove(struct platform_device *pdev)
 	struct omap_musb_board_data *data = plat->board_data;
 	int i;
 
+	pm_runtime_put_sync(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
+
 	/* delete the child platform device for mulitple instances of musb */
 	for (i = 0; i <= data->instances; ++i)
 		ti81xx_delete_musb_pdev(glue, i);
@@ -1558,8 +1561,6 @@ static int __exit ti81xx_remove(struct platform_device *pdev)
 	iounmap(glue->mem_va);
 	usbotg_ss_uninit();
 
-	pm_runtime_put_sync(&pdev->dev);
-	pm_runtime_disable(&pdev->dev);
 	kfree(glue);
 
 	return 0;
