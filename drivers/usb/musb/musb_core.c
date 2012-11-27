@@ -1427,6 +1427,8 @@ enum { MUSB_CONTROLLER_MHDRC, MUSB_CONTROLLER_HDRC, };
  */
 static int __devinit musb_core_init(u16 musb_type, struct musb *musb)
 {
+	struct device *dev = musb->controller;
+	struct musb_hdrc_platform_data *plat = dev->platform_data;
 	u8 reg;
 	char *type;
 	char aInfo[90], aRevision[32], aDate[12];
@@ -1552,6 +1554,17 @@ static int __devinit musb_core_init(u16 musb_type, struct musb *musb)
 		}
 		if (!(hw_ep->max_packet_sz_tx || hw_ep->max_packet_sz_rx))
 			dev_dbg(musb->controller, "hw_ep %d not configured\n", i);
+	}
+
+	if (!plat->config->mult_bulk_tx) {
+		musb->bulk_split = 0;
+		printk(KERN_DEBUG "%s.%d: bulk split disabled\n",
+			musb_driver_name, musb->id);
+	}
+	if (!plat->config->mult_bulk_rx) {
+		musb->bulk_combine = 0;
+		printk(KERN_DEBUG "%s.%d: bulk combine disabled\n",
+			musb_driver_name, musb->id);
 	}
 
 	return 0;
