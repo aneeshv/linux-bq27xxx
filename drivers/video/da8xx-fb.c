@@ -152,6 +152,20 @@ static inline void lcdc_write(unsigned int val, unsigned int addr)
 	writel(val, da8xx_fb_reg_base + (addr));
 }
 
+struct da8xx_panel {
+	const char	name[25];	/* Full name <vendor>_<model> */
+	unsigned short	width;
+	unsigned short	height;
+	int		hfp;		/* Horizontal front porch */
+	int		hbp;		/* Horizontal back porch */
+	int		hsw;		/* Horizontal Sync Pulse Width */
+	int		vfp;		/* Vertical front porch */
+	int		vbp;		/* Vertical back porch */
+	int		vsw;		/* Vertical Sync Pulse Width */
+	unsigned int	pxl_clk;	/* Pixel clock */
+	unsigned char	invert_pxl_clk;	/* Invert Pixel clock */
+};
+
 struct da8xx_fb_par {
 	struct device *dev;
 	resource_size_t p_palette_base;
@@ -182,6 +196,8 @@ struct da8xx_fb_par {
 	unsigned int		lcd_fck_rate;
 #endif
 	void (*panel_power_ctrl)(int);
+	struct da8xx_panel	*lcdc_info;
+	struct lcd_ctrl_config	*lcd_cfg;
 };
 
 /* Variable Screen Information */
@@ -211,20 +227,6 @@ static struct fb_fix_screeninfo da8xx_fb_fix __devinitdata = {
 	.ypanstep = 1,
 	.ywrapstep = 0,
 	.accel = FB_ACCEL_NONE
-};
-
-struct da8xx_panel {
-	const char	name[25];	/* Full name <vendor>_<model> */
-	unsigned short	width;
-	unsigned short	height;
-	int		hfp;		/* Horizontal front porch */
-	int		hbp;		/* Horizontal back porch */
-	int		hsw;		/* Horizontal Sync Pulse Width */
-	int		vfp;		/* Vertical front porch */
-	int		vbp;		/* Vertical back porch */
-	int		vsw;		/* Vertical Sync Pulse Width */
-	unsigned int	pxl_clk;	/* Pixel clock */
-	unsigned char	invert_pxl_clk;	/* Invert Pixel clock */
 };
 
 static vsync_callback_t vsync_cb_handler;
@@ -1493,6 +1495,9 @@ static int __devinit fb_probe(struct platform_device *device)
 	if (ret)
 		goto err_release_pl_mem;
 	da8xx_fb_info->cmap.len = par->palette_sz;
+
+	par->lcdc_info = lcdc_info;
+	par->lcd_cfg = lcd_cfg;
 
 	/* initialize var_screeninfo */
 	da8xx_fb_var.activate = FB_ACTIVATE_FORCE;
