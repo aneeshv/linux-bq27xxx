@@ -318,6 +318,11 @@ static struct da8xx_panel known_lcd_panels[] = {
 	},
 };
 
+static inline bool is_raster_enabled(void)
+{
+	return !!(lcdc_read(LCD_RASTER_CTRL_REG) & LCD_RASTER_ENABLE);
+}
+
 /* Enable the Raster Engine of the LCD Controller */
 static inline void lcd_enable_raster(void)
 {
@@ -725,9 +730,6 @@ static int fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 
 static void lcd_reset(struct da8xx_fb_par *par)
 {
-	/* Disable the Raster if previously Enabled */
-	lcd_disable_raster(NO_WAIT_FOR_FRAME_DONE);
-
 	/* DMA has to be disabled */
 	lcdc_write(0, LCD_DMA_CTRL_REG);
 	lcdc_write(0, LCD_RASTER_CTRL_REG);
@@ -762,8 +764,6 @@ static int lcd_init(struct da8xx_fb_par *par, const struct lcd_ctrl_config *cfg,
 {
 	u32 bpp;
 	int ret = 0;
-
-	lcd_reset(par);
 
 	/* Calculate the divider */
 	lcd_calc_clk_divider(par);
@@ -1277,9 +1277,60 @@ static int da8xx_pan_display(struct fb_var_screeninfo *var,
 	return ret;
 }
 
+static int da8xxfb_set_par(struct fb_info *info)
+{
+	struct da8xx_fb_par *par = info->par;
+	struct lcd_ctrl_config *lcd_cfg = par->lcd_cfg;
+	struct da8xx_panel *lcdc_info = par->lcdc_info;
+	unsigned long long pxl_clk = 1000000000000ULL;
+	bool raster;
+	int ret;
+
+	raster = is_raster_enabled();
+
+	lcdc_info->hfp = info->var.right_margin;
+	lcdc_info->hbp = info->var.left_margin;
+	lcdc_info->vfp = info->var.lower_margin;
+	lcdc_info->vbp = info->var.upper_margin;
+	lcdc_info->hsw = info->var.hsync_len;
+	lcdc_info->vsw = info->var.vsync_len;
+	lcdc_info->width = info->var.xres;
+	lcdc_info->height = info->var.yres;
+
+	do_div(pxl_clk, info->var.pixclock);
+	par->pxl_clk = pxl_clk;
+
+	lcd_cfg->bpp = info->var.bits_per_pixel;
+
+	if (raster)
+		lcd_disable_raster(WAIT_FOR_FRAME_DONE);
+	else
+		lcd_disable_raster(NO_WAIT_FOR_FRAME_DONE);
+
+	info->fix.visual = (lcd_cfg->bpp <= 8) ?
+				FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_TRUECOLOR;
+	info->fix.line_length = (lcdc_info->width * lcd_cfg->bpp) / 8;
+
+	par->dma_start = par->vram_phys;
+	par->dma_end   = par->dma_start + lcdc_info->height *
+				info->fix.line_length - 1;
+
+	ret = lcd_init(par, lcd_cfg, lcdc_info);
+	if (ret < 0) {
+		dev_err(par->dev, "lcd init failed\n");
+		return ret;
+	}
+
+	if (raster)
+		lcd_enable_raster();
+
+	return 0;
+}
+
 static struct fb_ops da8xx_fb_ops = {
 	.owner = THIS_MODULE,
 	.fb_check_var = fb_check_var,
+	.fb_set_par = da8xxfb_set_par,
 	.fb_setcolreg = fb_setcolreg,
 	.fb_pan_display = da8xx_pan_display,
 	.fb_ioctl = fb_ioctl,
@@ -1408,11 +1459,7 @@ static int __devinit fb_probe(struct platform_device *device)
 		par->panel_power_ctrl(1);
 	}
 
-	if (lcd_init(par, lcd_cfg, lcdc_info) < 0) {
-		dev_err(&device->dev, "lcd_init failed\n");
-		ret = -EFAULT;
-		goto err_release_fb;
-	}
+	lcd_reset(par);
 
 	/* allocate frame buffer */
 	par->vram_size = lcdc_info->width * lcdc_info->height * lcd_cfg->bpp;
