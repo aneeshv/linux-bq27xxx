@@ -609,6 +609,29 @@ void txfifoempty_intr_disable(struct musb *musb, u8 ep_num)
 
 #endif /* CONFIG_USB_TI_CPPI41_DMA */
 
+void ti81xx_musb_enable_sof(struct musb *musb)
+{
+	void __iomem *reg_base = musb->ctrl_base;
+
+	musb->sof_enabled = 1;
+	musb_writeb(musb->mregs, MUSB_INTRUSBE, MUSB_INTR_SOF |
+		musb_readb(musb->mregs, MUSB_INTRUSBE));
+	musb_writel(reg_base, USB_CORE_INTR_SET_REG, MUSB_INTR_SOF |
+		musb_readl(reg_base, USB_CORE_INTR_SET_REG));
+}
+
+void ti81xx_musb_disable_sof(struct musb *musb)
+{
+	void __iomem *reg_base = musb->ctrl_base;
+	u8 intrusb;
+
+	intrusb = musb_readb(musb->mregs, MUSB_INTRUSBE);
+	intrusb &= ~MUSB_INTR_SOF;
+	musb_writeb(musb->mregs, MUSB_INTRUSBE, intrusb);
+	musb_writel(reg_base, USB_CORE_INTR_CLEAR_REG, MUSB_INTR_SOF);
+	musb->sof_enabled = 0;
+}
+
 /**
  * ti81xx_musb_enable - enable interrupts
  */
@@ -846,15 +869,20 @@ int musb_simulate_babble(struct musb *musb)
 {
 	void __iomem *reg_base = musb->ctrl_base;
 	void __iomem *mbase = musb->mregs;
+	struct device *dev = musb->controller;
+	struct musb_hdrc_platform_data *plat = dev->platform_data;
+	struct omap_musb_board_data *data = plat->board_data;
 	u8 reg;
 
 	/* during babble condition musb controller
 	 * remove the session
 	 */
-	reg = musb_readb(mbase, MUSB_DEVCTL);
-	reg &= ~MUSB_DEVCTL_SESSION;
-	musb_writeb(mbase, MUSB_DEVCTL, reg);
-	mdelay(100);
+	if (!data->babble_ctrl) {
+		reg = musb_readb(mbase, MUSB_DEVCTL);
+		reg &= ~MUSB_DEVCTL_SESSION;
+		musb_writeb(mbase, MUSB_DEVCTL, reg);
+		mdelay(100);
+	}
 
 	/* generate s/w babble interrupt */
 	musb_writel(reg_base, USB_IRQ_STATUS_RAW_1, MUSB_INTR_BABBLE);
@@ -940,15 +968,28 @@ void musb_babble_hwfix(struct musb *musb)
 				temp);
 
 			session_restart = 1;
-		} else
-			pr_info("babble: controller resume normal operation\n");
+		} else {
+			pr_info("babble: controller shall resume normal\n");
+			/* check controller resumes normal operation
+			 * by checking sof occurs for few frames
+			 */
+			musb->sof_cnt = 2;
+			ti81xx_musb_enable_sof(musb);
+			udelay(280);
+			if (musb->sof_cnt) {
+				pr_info("babble: controller cannot resume\n");
+				session_restart = 1;
+			} else
+				pr_info("babble: controller resumed normal\n");
+			ti81xx_musb_disable_sof(musb);
+		}
 	} else
 		session_restart = 1;
 
 	if (session_restart) {
 		unsigned long flags;
 
-		dev_dbg(musb->controller, "Reset session and restart controller\n");
+		dev_dbg(musb->controller, "babble: restart controller\n");
 		temp = musb_readb(musb->mregs, MUSB_DEVCTL);
 		temp &= ~MUSB_DEVCTL_SESSION;
 		musb_writeb(musb->mregs, MUSB_DEVCTL, temp);
@@ -1010,6 +1051,16 @@ static irqreturn_t ti81xx_interrupt(int irq, void *hci)
 	musb->int_usb =	(usbintr & USB_INTR_USB_MASK) >> USB_INTR_USB_SHIFT;
 
 	dev_dbg(musb->controller, "usbintr (%x) epintr(%x)\n", usbintr, epintr);
+
+	if (musb->int_usb & MUSB_INTR_SOF) {
+		if (musb->sof_enabled) {
+			if (musb->sof_cnt == 0)
+				ti81xx_musb_disable_sof(musb);
+			else
+				--musb->sof_cnt;
+		}
+		ret = IRQ_HANDLED;
+	}
 
 	if (musb->txfifo_intr_enable && (usbintr & USB_INTR_TXFIFO_MASK)) {
 #ifdef CONFIG_USB_TI_CPPI41_DMA

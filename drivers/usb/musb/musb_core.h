@@ -479,6 +479,8 @@ struct musb {
 	u8			txfifo_intr_enable;
 	u8			datatog_fix;
 	u8			hw_babble_ctrl;
+	u8			sof_enabled;
+	u32			sof_cnt;
 };
 
 static inline struct musb *gadget_to_musb(struct usb_gadget *g)
