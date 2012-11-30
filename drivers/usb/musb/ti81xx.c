@@ -796,7 +796,6 @@ void ti81xx_musb_try_idle(struct musb *musb, unsigned long timeout)
 #ifdef CONFIG_USB_TI_CPPI41_DMA
 static irqreturn_t cppi41dma_Interrupt(int irq, void *hci)
 {
-	struct musb  *musb = hci;
 	u32 intr_status;
 	irqreturn_t ret = IRQ_NONE;
 	u32 q_cmpl_status_0, q_cmpl_status_1, q_cmpl_status_2;
@@ -805,7 +804,6 @@ static irqreturn_t cppi41dma_Interrupt(int irq, void *hci)
 	void *q_mgr_base = cppi41_queue_mgr[0].q_mgr_rgn_base;
 	unsigned long flags;
 
-	musb = hci;
 	/*
 	 * CPPI 4.1 interrupts share the same IRQ and the EOI register but
 	 * don't get reflected in the interrupt source/mask registers.
@@ -840,9 +838,9 @@ static irqreturn_t cppi41dma_Interrupt(int irq, void *hci)
 
 	/* get proper musb handle based usb0/usb1 ctrl-id */
 
-	dev_dbg(musb->controller, "CPPI 4.1 IRQ: Tx %x, Rx %x\n", usb0_tx_intr,
-				usb0_rx_intr);
 	if (gmusb[0] && (usb0_tx_intr || usb0_rx_intr)) {
+		dev_dbg(gmusb[0]->controller, "CPPI 4.1 IRQ: Tx %x, Rx %x\n",
+			usb0_tx_intr, usb0_rx_intr);
 		spin_lock_irqsave(&gmusb[0]->lock, flags);
 		cppi41_completion(gmusb[0], usb0_rx_intr,
 					usb0_tx_intr);
@@ -850,9 +848,9 @@ static irqreturn_t cppi41dma_Interrupt(int irq, void *hci)
 		ret = IRQ_HANDLED;
 	}
 
-	dev_dbg(musb->controller, "CPPI 4.1 IRQ: Tx %x, Rx %x\n", usb1_tx_intr,
-		usb1_rx_intr);
 	if (gmusb[1] && (usb1_rx_intr || usb1_tx_intr)) {
+		dev_dbg(gmusb[1]->controller, "CPPI 4.1 IRQ: Tx %x, Rx %x\n",
+			usb1_tx_intr, usb1_rx_intr);
 		spin_lock_irqsave(&gmusb[1]->lock, flags);
 		cppi41_completion(gmusb[1], usb1_rx_intr,
 			usb1_tx_intr);
