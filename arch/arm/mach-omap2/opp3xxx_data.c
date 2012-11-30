@@ -190,7 +190,7 @@ static struct omap_opp_def __initdata am33xx_es2_0_opp_def_list[] = {
 	OPP_INITIALIZER("mpu", true,  600000000,
 				AM33XX_ES2_0_VDD_MPU_OPP100_UV),
 	/* MPU OPP3 - OPPTurbo */
-	OPP_INITIALIZER("mpu", false, 800000000,
+	OPP_INITIALIZER("mpu", true, 800000000,
 				AM33XX_ES2_0_VDD_MPU_OPPTURBO_UV),
 	/* MPU OPP4 - OPPNitro */
 	OPP_INITIALIZER("mpu", false, 1000000000,
