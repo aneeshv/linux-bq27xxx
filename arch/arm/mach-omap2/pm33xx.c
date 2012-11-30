@@ -548,6 +548,13 @@ static int __init am33xx_pm_init(void)
 	else
 		suspend_cfg_param_list[EVM_ID] = 0xff;
 
+	/* CPU Revision */
+	reg = omap_rev();
+	if (reg == AM335X_REV_ES2_0)
+		suspend_cfg_param_list[CPU_REV] = CPU_REV_2;
+	else
+		suspend_cfg_param_list[CPU_REV] = CPU_REV_1;
+
 	(void) clkdm_for_each(clkdms_setup, NULL);
 
 	/* CEFUSE domain should be turned off post bootup */

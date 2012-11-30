@@ -1,3 +1,4 @@
+
 /*
  * Low level suspend code for AM33XX SoCs
  *
@@ -40,6 +41,7 @@
  * 1) memory_type [r0]
  * 2) susp_vtp_ctrl_val [r1]
  * 3) evm_id [r2]
+ * 4) cpu_rev [r3]
  *
  * The code loads these values taking r0 value as reference to the array in
  * registers starting from r0, i,e memory_type goes to r0 and susp_vtp_ctrl_val
@@ -49,6 +51,8 @@
  *
  * mem_type is used to decide different suspend-resume sequences for DDR2
  * and DDR3.
+ * cpu_rev is used to have/skip certain steps selectively for PG2.0 suspend-resume
+ * sequence like switching to LVCMOS mode is not required for PG2.0.
  */
 	.align 3
 ENTRY(am33xx_do_wfi)
@@ -135,12 +139,13 @@ wait_sc_\num:
 	mov	r0, #0
 	mcr	p15, 0, r0, c7, c5, 0	@ I+BTB cache invalidate
 
-	ldm	r8, {r0-r2}		@ gather values passed
+	ldm	r8, {r0-r3}		@ gather values passed
 
 	/* Save the values passed */
 	str	r0, mem_type
 	str	r1, susp_vtp_ctrl_val
 	str	r2, evm_id
+	str	r3, cpu_rev
 
 	ldr	r0, emif_addr_virt
 
@@ -254,6 +259,11 @@ wait_gpio0_disable:
 	bne	wait_gpio0_disable
 
 no_gpio_toggle:
+	/* mddr mode selection not required for PG2.0 */
+	ldr	r6, cpu_rev
+	cmp	r6, #CPU_REV_2
+	beq	mddr_modesel_skip
+
 	/* Put IO in mDDR (cmos) mode */
 	ldr	r0, virt_ddr_io_ctrl
 	ldr	r1, [r0]
@@ -261,6 +271,7 @@ no_gpio_toggle:
 	orr	r3,r2,r1
 	str	r3, [r0]
 
+mddr_modesel_skip:
 	/* Disable EMIF at this point */
 	ldr	r1, virt_emif_clkctrl
 	ldr	r2, [r1]
@@ -384,6 +395,11 @@ wait_emif_enable3:
 	ldr	r3, [r1]
 	cmp	r2, r3
 	bne	wait_emif_enable3
+
+	/* mddr mode selection not required for PG2.0 */
+	ldr	r6, cpu_rev
+	cmp	r6, #CPU_REV_2
+	beq	config_vtp_abt3
 
 	/* Take out IO of mDDR mode */
 	ldr	r0, virt_ddr_io_ctrl
@@ -588,6 +604,11 @@ ENTRY(am33xx_resume_from_deep_sleep)
 	str	r1, [r0]
 
 	/* TODO: Put EMIF enable here */
+
+	/* mddr mode selection not required for PG2.0 */
+	ldr	r6, cpu_rev
+	cmp	r6, #CPU_REV_2
+	beq	config_vtp3
 
 	/* Take out IO of mDDR mode */
 	ldr	r0, phys_ddr_io_ctrl
@@ -935,6 +956,8 @@ susp_vtp_ctrl_val:
 mem_type:
 	.word	0xDEADBEEF
 evm_id:
+	.word	0xDEADBEEF
+cpu_rev:
 	.word	0xDEADBEEF
 emif_addr_virt:
 	.word	0xDEADBEEF

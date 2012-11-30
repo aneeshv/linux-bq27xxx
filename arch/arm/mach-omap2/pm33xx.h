@@ -30,6 +30,7 @@ enum suspend_cfg_params {
 	MEMORY_TYPE = 0,
 	SUSP_VTP_CTRL_VAL,
 	EVM_ID,
+	CPU_REV,
 	SUSPEND_CFG_PARAMS_END /* Must be the last entry */
 };
 
@@ -123,5 +124,8 @@ static struct am33xx_padconf_regs am33xx_lp_padconf[] = {
 
 #define SUSP_VTP_CTRL_DDR2	0x10117
 #define SUSP_VTP_CTRL_DDR3	0x0
+
+#define CPU_REV_1		1
+#define CPU_REV_2		2
 
 #endif
