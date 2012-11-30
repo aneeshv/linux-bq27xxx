@@ -1931,6 +1931,7 @@ static int musb_gadget_start(struct usb_gadget *g,
 		 * ensures HdrcStart is indirectly called.
 		 */
 		retval = usb_add_hcd(musb_to_hcd(musb), -1, 0);
+		device_set_wakeup_enable(musb->controller, 0);
 		if (retval < 0) {
 			dev_dbg(musb->controller, "add_hcd failed, %d\n", retval);
 			goto err2;

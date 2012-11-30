@@ -905,7 +905,7 @@ void musb_babble_workaround(struct musb *musb)
 
 	/* Shutdown the on-chip PHY and its PLL. */
 	if (data->set_phy_power)
-		data->set_phy_power(musb->id, 0);
+		data->set_phy_power(musb->id, 0, false);
 	udelay(100);
 
 	musb_platform_set_mode(musb, MUSB_HOST);
@@ -913,7 +913,7 @@ void musb_babble_workaround(struct musb *musb)
 
 	/* enable the usbphy */
 	if (data->set_phy_power)
-		data->set_phy_power(musb->id, 1);
+		data->set_phy_power(musb->id, 1, false);
 	mdelay(100);
 
 	/* re-setup the endpoint fifo addresses */
@@ -1271,9 +1271,9 @@ int ti81xx_musb_init(struct musb *musb)
 	while ((musb_readl(reg_base, USB_CTRL_REG) & 0x1))
 		cpu_relax();
 
-	/* Start the on-chip PHY and its PLL. */
+	/* Start the on-chip PHY and its PLL with PHYWKUP disabled */
 	if (data->set_phy_power)
-		data->set_phy_power(musb->id, 1);
+		data->set_phy_power(musb->id, 1, false);
 
 	musb->a_wait_bcon = A_WAIT_BCON_TIMEOUT;
 	musb->isr = ti81xx_interrupt;
@@ -1376,7 +1376,7 @@ int ti81xx_musb_exit(struct musb *musb)
 
 	/* Shutdown the on-chip PHY and its PLL. */
 	if (data->set_phy_power)
-		data->set_phy_power(musb->id, 0);
+		data->set_phy_power(musb->id, 0, false);
 
 	otg_put_transceiver(musb->xceiv);
 	usb_nop_xceiv_unregister(musb->id);
@@ -1787,15 +1787,24 @@ static int ti81xx_runtime_suspend(struct device *dev)
 	struct ti81xx_glue *glue = dev_get_drvdata(dev);
 	struct musb_hdrc_platform_data *plat = dev->platform_data;
 	struct omap_musb_board_data *data = plat->board_data;
+	struct platform_device *pdev;
 	int i;
 
 	/* save wrappers and cppi4.1 dma register */
 	ti81xx_save_context(glue);
 
-	/* Shutdown the on-chip PHY and its PLL. */
-	for (i = 0; i <= data->instances; ++i) {
-		if (data->set_phy_power)
-			data->set_phy_power(i, 0);
+	/* Shutdown the on-chip PHY and its PLL.
+	 * Enable USB PHYWKUP only if enabled through sysfs.
+	 * By default USB PHYWKUP is  disabled
+	 */
+	if (data->set_phy_power) {
+		for (i = 0; i <= data->instances; ++i) {
+			pdev = glue->musb[i];
+			if (device_may_wakeup(&pdev->dev))
+				data->set_phy_power(i, 0, true);
+			else
+				data->set_phy_power(i, 0, false);
+		}
 	}
 
 	return 0;
@@ -1820,7 +1829,7 @@ static int ti81xx_runtime_resume(struct device *dev)
 	/* Start the on-chip PHY and its PLL. */
 	for (i = 0; i <= data->instances; ++i) {
 		if (data->set_phy_power)
-			data->set_phy_power(i, 1);
+			data->set_phy_power(i, 1, false);
 	}
 
 	/* restore wrappers and cppi4.1 dma register */

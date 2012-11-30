@@ -91,7 +91,7 @@ struct omap_musb_board_data {
 	u8	instances;
 	u8	grndis_for_host_rx;
 	u8	babble_ctrl;
-	void	(*set_phy_power)(u8 id, u8 on);
+	void	(*set_phy_power)(u8 id, u8 on, bool wkup);
 	void	(*clear_irq)(void);
 	void	(*set_mode)(u8 mode);
 	void	(*reset)(void);
@@ -114,7 +114,7 @@ extern void am35x_musb_reset(void);
 extern void am35x_musb_phy_power(u8 id, u8 on);
 extern void am35x_musb_clear_irq(void);
 extern void am35x_set_mode(u8 musb_mode);
-extern void ti81xx_musb_phy_power(u8 id, u8 on);
+extern void ti81xx_musb_phy_power(u8 id, u8 on, bool wkup);
 
 /*
  * FIXME correct answer depends on hmc_mode,
@@ -317,6 +317,8 @@ static inline void omap2_usbfs_init(struct omap_usb_config *pdata)
 
 /*AM335X USB wakeup control bits */
 #define AM33XX_USB_WKUP_CTRL_ENABLE    ((1 << 8) | (1 << 0))
+#define AM33XX_USB0_WKUP_CTRL_ENABLE    (1 << 0)
+#define AM33XX_USB1_WKUP_CTRL_ENABLE    (1 << 8)
 #define AM33XX_USB_WKUP_CTRL_DISABLE   0x0
 
 
