@@ -1656,6 +1656,12 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 			netpoll should wait for a carrier. By default netpoll
 			waits 4 seconds.
 
+	bootp_dev_delay=
+			[NET] Specifies amount of time (in ticks) that bootp
+			has to wait for the DHCP response when we have multiple
+			network devices. By default bootp inter device timeout
+			is HZ/2 ticks
+
 	no387		[BUGS=X86-32] Tells the kernel to use the 387 maths
 			emulation library even if a 387 maths coprocessor
 			is present.

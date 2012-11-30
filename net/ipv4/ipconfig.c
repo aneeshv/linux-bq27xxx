@@ -143,6 +143,8 @@ u8 root_server_path[256] = { 0, };	/* Path to mount as root */
 
 u32 ic_dev_xid;		/* Device under configuration */
 
+static u32 ic_inter_dev_timeout = CONF_INTER_TIMEOUT;
+
 /* vendor class identifier */
 static char vendor_class_identifier[253] __initdata;
 
@@ -1125,6 +1127,13 @@ drop:
 
 #ifdef IPCONFIG_DYNAMIC
 
+static int __init bootp_dev_delay(char *str)
+{
+	ic_inter_dev_timeout = simple_strtoul(str, NULL, 0);
+	return 1;
+}
+__setup("bootp_dev_delay=", bootp_dev_delay);
+
 static int __init ic_dynamic(void)
 {
 	int retries;
@@ -1200,7 +1209,7 @@ static int __init ic_dynamic(void)
 			ic_rarp_send_if(d);
 #endif
 
-		jiff = jiffies + (d->next ? CONF_INTER_TIMEOUT : timeout);
+		jiff = jiffies + (d->next ? ic_inter_dev_timeout : timeout);
 		while (time_before(jiffies, jiff) && !ic_got_reply)
 			schedule_timeout_uninterruptible(1);
 #ifdef IPCONFIG_DHCP
