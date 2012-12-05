@@ -109,7 +109,15 @@ static int am33xx_pm_suspend(void)
 	omap_hwmod_enable(usb_oh);
 	omap_hwmod_enable(gpmc_oh);
 
-	omap_hwmod_idle(usb_oh);
+	/*
+	 * Keep USB module enabled during standby
+	 * to enable USB remote wakeup
+	 * Note: This will result in hard-coding USB state
+	 * during standby
+	 */
+	if (suspend_state != PM_SUSPEND_STANDBY)
+		omap_hwmod_idle(usb_oh);
+
 	omap_hwmod_idle(gpmc_oh);
 
 	/*
@@ -157,6 +165,12 @@ static int am33xx_pm_suspend(void)
 		clkdm_wakeup(gfx_l3_clkdm);
 		clkdm_wakeup(gfx_l4ls_clkdm);
 	}
+
+	/*
+	 * Put USB module to idle on resume from standby
+	 */
+	if (suspend_state == PM_SUSPEND_STANDBY)
+		omap_hwmod_idle(usb_oh);
 
 	ret = am33xx_verify_lp_state(ret);
 
