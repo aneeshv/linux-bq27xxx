@@ -1308,7 +1308,7 @@ int ti81xx_musb_init(struct musb *musb)
 	 * issue fixed in PG2.0 RTL
 	 */
 	if (data->grndis_for_host_rx)
-		usb_cppi41_info[musb->id].grndis_for_host_rx = 1;
+		usb_cppi41_info[musb->id].rx_dma_mode = USB_GENERIC_RNDIS_MODE;
 #endif
 	/* enable babble workaround */
 	INIT_WORK(&musb->work, evm_deferred_musb_restart);
