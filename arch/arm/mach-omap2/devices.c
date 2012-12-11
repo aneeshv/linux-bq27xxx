@@ -20,6 +20,7 @@
 #include <linux/of.h>
 #include <linux/davinci_emac.h>
 #include <linux/cpsw.h>
+#include <linux/phy.h>
 #include <linux/etherdevice.h>
 #include <linux/dma-mapping.h>
 #include <linux/can/platform/d_can.h>
@@ -1312,6 +1313,8 @@ int am33xx_cpsw_init(enum am33xx_cpsw_mac_mode mode, unsigned char *phy_id0,
 		break;
 	case AM33XX_CPSW_MODE_RGMII:
 		gmii_sel = AM33XX_RGMII_MODE_EN;
+		am33xx_cpsw_slaves[0].phy_if = PHY_INTERFACE_MODE_RGMII;
+		am33xx_cpsw_slaves[1].phy_if = PHY_INTERFACE_MODE_RGMII;
 		break;
 	default:
 		return -EINVAL;
