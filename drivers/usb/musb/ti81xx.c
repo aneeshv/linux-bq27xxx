@@ -1298,7 +1298,10 @@ int ti81xx_musb_init(struct musb *musb)
 	musb_platform_set_mode(musb, mode);
 
 #ifdef CONFIG_USB_TI_CPPI41_DMA
-	musb->txfifo_intr_enable = 1;
+	/* TxFifo empty interrupt logic is supported
+	 * only for isochronous tranfers only
+	 */
+	musb->txfifo_intr_enable = data->txfifo_intr_enable;
 	if (musb->txfifo_intr_enable)
 		printk(KERN_DEBUG "TxFifo Empty intr enabled\n");
 	else

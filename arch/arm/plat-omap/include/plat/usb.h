@@ -91,6 +91,7 @@ struct omap_musb_board_data {
 	u8	instances;
 	u8	grndis_for_host_rx;
 	u8	babble_ctrl;
+	u8	txfifo_intr_enable;
 	void	(*set_phy_power)(u8 id, u8 on, bool wkup);
 	void	(*clear_irq)(void);
 	void	(*set_mode)(u8 mode);

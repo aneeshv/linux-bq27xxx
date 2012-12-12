@@ -101,6 +101,11 @@ void __init usb_musb_init(struct omap_musb_board_data *musb_board_data)
 		name = "musb-ti81xx";
 		board_data->grndis_for_host_rx = 0;
 		board_data->babble_ctrl = 0;
+
+		/* enable txfifo interrupt enable */
+		if (cpu_is_am33xx())
+			board_data->txfifo_intr_enable = 1;
+
 		if (cpu_is_am33xx() && omap_rev() >= AM335X_REV_ES2_0) {
 			board_data->grndis_for_host_rx = 1;
 			board_data->babble_ctrl = 1;
