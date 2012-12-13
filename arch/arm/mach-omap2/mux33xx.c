@@ -298,7 +298,7 @@ static struct omap_mux __initdata am33xx_muxmodes[] = {
 		NULL, "mmc0_sdcd", NULL, "gpio0_6"),
 	_AM33XX_MUXENTRY(ECAP0_IN_PWM0_OUT, 0,
 		"ecap0_in_pwm0_out", "uart3_txd", "spi1_cs1", NULL,
-		"spi1_sclk", "mmc0_sdwp", NULL, "gpio0_7"),
+		"spi1_sclk", "mmc0_sdwp", "xdma_event_intr2", "gpio0_7"),
 	_AM33XX_MUXENTRY(UART0_CTSN, 0,
 		"uart0_ctsn", NULL, "d_can1_tx", "i2c1_sda",
 		"spi1_d0", NULL, NULL, "gpio1_8"),
