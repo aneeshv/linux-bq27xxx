@@ -15,7 +15,9 @@
 
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/io.h>
 
+#include "control.h"
 #include "mux.h"
 
 #ifdef CONFIG_OMAP_MUX
@@ -413,9 +415,83 @@ int __init am33xx_mux_init(struct omap_board_mux *board_subset)
 			AM33XX_CONTROL_PADCONF_MUX_SIZE, am33xx_muxmodes,
 			NULL, board_subset, NULL);
 }
+
+#ifdef CONFIG_SUSPEND
+struct am33xx_padconf_regs {
+	u16 offset;
+	u32 val;
+};
+
+static struct am33xx_padconf_regs am33xx_lp_padconf[] = {
+	{.offset = AM33XX_CONTROL_GMII_SEL_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A0_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A1_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A2_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A3_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A4_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A5_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A6_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A7_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A8_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A9_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A10_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_A11_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_WAIT0_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_WPN_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_GPMC_BEN1_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_COL_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_CRS_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXERR_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXEN_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXDV_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXD3_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXD2_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXD1_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXD0_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_TXCLK_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXCLK_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXD3_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXD2_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXD1_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_RXD0_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MII1_REFCLK_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MDIO_DATA_OFFSET},
+	{.offset = AM33XX_CONTROL_PADCONF_MDIO_CLK_OFFSET},
+};
+#endif /* CONFIG_SUSPEND */
+
+void am335x_save_padconf(void)
+{
+	struct am33xx_padconf_regs *temp = am33xx_lp_padconf;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
+		temp->val = readl(AM33XX_CTRL_REGADDR(temp->offset));
+}
+
+void am335x_restore_padconf(void)
+{
+	struct am33xx_padconf_regs *temp = am33xx_lp_padconf;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
+		writel(temp->val, AM33XX_CTRL_REGADDR(temp->offset));
+}
+
 #else
 int __init am33xx_mux_init(struct omap_board_mux *board_subset)
 {
 	return 0;
 }
+
+void am335x_save_padconf(void)
+{
+	return;
+}
+
+void am335x_restore_padconf(void)
+{
+	return;
+}
+
 #endif

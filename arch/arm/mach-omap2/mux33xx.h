@@ -238,4 +238,9 @@
 #define AM33XX_CONTROL_PADCONF_MUX_SIZE				\
 		(AM33XX_CONTROL_PADCONF_VREFN_OFFSET + 0x4)
 
+#ifndef __ASSEMBLER__
+void am335x_save_padconf(void);
+void am335x_restore_padconf(void);
+#endif
+
 #endif

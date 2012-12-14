@@ -74,36 +74,18 @@ static void am33xx_m3_state_machine_reset(void);
 
 static DECLARE_COMPLETION(a8_m3_sync);
 
-static void save_padconf(void)
-{
-	struct am33xx_padconf_regs *temp = am33xx_lp_padconf;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
-		temp->val = readl(AM33XX_CTRL_REGADDR(temp->offset));
-}
-
-static void restore_padconf(void)
-{
-	struct am33xx_padconf_regs *temp = am33xx_lp_padconf;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
-		writel(temp->val, AM33XX_CTRL_REGADDR(temp->offset));
-}
-
 static int am33xx_pm_prepare_late(void)
 {
 	int ret = 0;
 
-	save_padconf();
+	am335x_save_padconf();
 
 	return ret;
 }
 
 static void am33xx_pm_finish(void)
 {
-	restore_padconf();
+	am335x_restore_padconf();
 }
 
 static int am33xx_do_sram_idle(long unsigned int state)
