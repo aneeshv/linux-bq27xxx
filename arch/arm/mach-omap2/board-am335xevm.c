@@ -483,7 +483,7 @@ struct am335x_eeprom_config1 {
 };
 
 /*
-*LCD cape EEPROM config
+*Beaglebone cape EEPROM config
 *
 *-------------------------------------------------------------------
 *Name		offset	size 	contents
@@ -513,7 +513,7 @@ struct am335x_eeprom_config1 {
 *				nnnn = incrementing board number
 */
 
-struct lcd_cape_eeprom_config {
+struct bone_cape_eeprom_config {
 	u8	header[4];
 	u8 	revision[2];
 	u8	board_name[32];
@@ -526,7 +526,7 @@ struct lcd_cape_eeprom_config {
 
 static struct am335x_evm_eeprom_config config;
 static struct am335x_eeprom_config1 config1;
-static struct lcd_cape_eeprom_config cape_eeprom_config;
+static struct bone_cape_eeprom_config cape_eeprom_config;
 
 static bool daughter_brd_detected;
 
@@ -2233,29 +2233,30 @@ static void i2c1_init(int evm_id, int profile)
 	return;
 }
 
+static struct at24_platform_data bone_display_daughter_board_eeprom_info;
 static struct at24_platform_data bone_daughter_board_eeprom_info;
 
 static struct i2c_board_info am335x_i2c2_boardinfo[] = {
 	{
-		/* Daughter Board EEPROM */
-		I2C_BOARD_INFO("24c256", LCD_CAPE_I2C_ADDR),
+		/* Cape EEPROM - Only for Display Capes */
+		I2C_BOARD_INFO("24c256", DISPLAY_CAPE_I2C_ADDR),
+		.platform_data  = &bone_display_daughter_board_eeprom_info,
+	},
+	{
+		/* Cape EEPROM */
+		I2C_BOARD_INFO("24c256", 0x55),
 		.platform_data  = &bone_daughter_board_eeprom_info,
 	},
-	//{
-		/* Daughter Board EEPROM */
-	//	I2C_BOARD_INFO("24c256", 0x55),
-	//	.platform_data  = &bone_daughter_board_eeprom_info,
-	//},
 	{
-		/* Daughter Board EEPROM */
+		/* Cape EEPROM */
 		I2C_BOARD_INFO("24c256", 0x56),
 		.platform_data  = &bone_daughter_board_eeprom_info,
 	},
-	//{
-		/* Daughter Board EEPROM */
-	//	I2C_BOARD_INFO("24c256", 0x57),
-	//	.platform_data  = &bone_daughter_board_eeprom_info,
-	//},
+	{
+		/* Cape EEPROM */
+		I2C_BOARD_INFO("24c256", 0x57),
+		.platform_data  = &bone_daughter_board_eeprom_info,
+	},
 };
 
 static void i2c2_init(int evm_id, int profile)
@@ -2952,7 +2953,7 @@ static void am335x_setup_daughter_board(struct memory_accessor *m, void *c)
 		pr_err("Unknown CPLD version found\n");
 }
 
-static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
+static void bone_setup_display_daughter_board(struct memory_accessor *m, void *c)
 {
 	int ret;
 
@@ -2963,18 +2964,17 @@ static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
 	 */
 	pr_info("IN : %s \n", __FUNCTION__);
 	ret = m->read(m, (char *) &cape_eeprom_config, 0,
-			sizeof( struct lcd_cape_eeprom_config));
+			sizeof( struct bone_cape_eeprom_config));
 
-	if (ret == sizeof (struct lcd_cape_eeprom_config))
+	if (ret == sizeof (struct bone_cape_eeprom_config))
 	{
 		pr_info("Detected a daughter card on BeagleBone..");
 
 		if (!strcmp(cape_eeprom_config.board_name, "BeagleBone LCD Cape") ||
 			!strncmp(cape_eeprom_config.board_name, LCD7_CAPE_NAME_2, sizeof(LCD7_CAPE_NAME_2) - 1)) {
-			pr_info("BeagleBone LCD cape board detected\n");
+			pr_info("BeagleBone LCD7 cape board detected\n");
 			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
-			printk ("Manufacturer : %s", cape_eeprom_config.manufacturer);
-			printk ("Hardware revision : %s", cape_eeprom_config.version);
+			printk ("Hardware revision: %s\n", cape_eeprom_config.version);
 
 			if (!strncmp(cape_eeprom_config.version, LCD7_CAPE_REV_A1, sizeof(LCD7_CAPE_REV_A1) - 1))
 				/* rev A1 */
@@ -2988,36 +2988,61 @@ static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
 			enable_ehrpwm1(0,0);
 			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_tsc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+
+			return;
 		}
 		else if (!strncmp(cape_eeprom_config.board_name, LCD3_CAPE_NAME, (sizeof(LCD3_CAPE_NAME)- 1))) {
 			pr_info("BeagleBone LCD3 cape board detected\n");
 			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
-			printk ("Manufacturer : %s\n", cape_eeprom_config.manufacturer);
-			printk ("Hardware revision : %s\n", cape_eeprom_config.version);
+			printk ("Hardware revision: %s\n", cape_eeprom_config.version);
 
 			bone_lcd3_lcdc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_tsc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
-		}
-		if (!strncmp("BB-BONE-CAM-01", cape_eeprom_config.part_no, 14) ||
-			!strncmp("BB-BONE-CAM3-01", cape_eeprom_config.part_no, 15)) {
-			pr_info("BeagleBone cape: recognized Camera cape\n");
-			cssp_gpmc_init();
-		}
-		if (!strncmp("BB-BONE-DVID-01", cape_eeprom_config.part_no, 15)) {
-			/* Setup DVI display if daughter card detected is not LCD cape. */
-			dvi_init( DEV_ON_DGHTR_BRD, PROFILE_NONE);
-		}
 
-		return;
+			return;
+		}
+		else if (!strncmp("BB-BONE-DVID-01", cape_eeprom_config.part_no, 15) ||
+			!strncmp("BB-BONE-DVID-02", cape_eeprom_config.part_no, 15)) {
+			pr_info("BeagleBone DVI-D cape board detected\n");
+			dvi_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+
+			return;
+		}
 	}
 
 	/* Display needs to be initialized even if display daughter card is not found so as
 	 * to enable framebuffer driver which is needed for successful Android bootup
 	 */
 	pr_info("No daughter card found on BeagleBone\n");
-	vnc_lcdc_init (DEV_ON_BASEBOARD, PROFILE_NONE);
-	return;
+	vnc_lcdc_init(DEV_ON_BASEBOARD, PROFILE_NONE);
+}
+
+static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
+{
+	int ret;
+
+	/*
+	 * Read from the EEPROM to see the presence
+	 * of daughter board. If present, get daughter board
+	 * specific data.
+	 */
+	pr_info("IN : %s \n", __FUNCTION__);
+	ret = m->read(m, (char *) &cape_eeprom_config, 0,
+			sizeof( struct bone_cape_eeprom_config));
+
+	if (ret == sizeof (struct bone_cape_eeprom_config))
+	{
+		pr_info("Detected a daughter card on BeagleBone..");
+
+		if (!strncmp("BB-BONE-CAM-01", cape_eeprom_config.part_no, 14) ||
+			!strncmp("BB-BONE-CAM3-01", cape_eeprom_config.part_no, 15)) {
+			pr_info("BeagleBone Camera cape board detected\n");
+			cssp_gpmc_init();
+
+			return;
+		}
+	}
 }
 
 static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
@@ -3117,6 +3142,14 @@ static struct at24_platform_data am335x_baseboard_eeprom_info = {
 	.flags          = AT24_FLAG_ADDR16,
 	.setup          = am335x_evm_setup,
 	.context        = (void *)NULL,
+};
+
+static struct at24_platform_data bone_display_daughter_board_eeprom_info = {
+        .byte_len       = (256*1024) / 8,
+        .page_size      = 64,
+        .flags          = AT24_FLAG_ADDR16,
+        .setup          = bone_setup_display_daughter_board,
+        .context        = (void *)NULL,
 };
 
 static struct at24_platform_data bone_daughter_board_eeprom_info = {
