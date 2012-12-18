@@ -66,6 +66,7 @@ static struct powerdomain *cefuse_pwrdm, *gfx_pwrdm, *per_pwrdm;
 static struct clockdomain *gfx_l3_clkdm, *gfx_l4ls_clkdm;
 
 static int m3_state = M3_STATE_UNKNOWN;
+static int m3_version = M3_VERSION_UNKNOWN;
 
 static int am33xx_ipc_cmd(struct a8_wkup_m3_ipc_data *);
 static int am33xx_verify_lp_state(int);
@@ -361,6 +362,14 @@ static irqreturn_t wkup_m3_txev_handler(int irq, void *unused)
 
 	if (m3_state == M3_STATE_RESET) {
 		m3_state = M3_STATE_INITED;
+		m3_version = readl(ipc_regs + 0x8);
+		m3_version &= 0x0000ffff;
+		if (m3_version == M3_VERSION_UNKNOWN) {
+			pr_warning("Unable to read CM3 firmware version\n");
+		} else {
+			pr_info("Cortex M3 Firmware Version = 0x%x\n",
+							m3_version);
+		}
 	} else if (m3_state == M3_STATE_MSG_FOR_RESET) {
 		m3_state = M3_STATE_INITED;
 		omap_mbox_msg_rx_flush(m3_mbox);
@@ -392,6 +401,7 @@ static int wkup_m3_init(void)
 	struct omap_hwmod *wkup_m3_oh;
 	const struct firmware *firmware;
 	int ret = 0;
+	int ipc_reg_r = 0;
 
 	wkup_m3_oh = omap_hwmod_lookup("wkup_m3");
 
@@ -462,6 +472,16 @@ static int wkup_m3_init(void)
 	}
 
 	m3_state = M3_STATE_RESET;
+
+	/*
+	 * Invalidate M3 firmware version before hardreset.
+	 * Write invalid version in lower 4 nibbles of parameter
+	 * register (ipc_regs + 0x8).
+	 */
+	ipc_reg_r = readl(ipc_regs + 0x8);
+	ipc_reg_r &= 0xffff0000;
+	m3_version |= ipc_reg_r;
+	writel(m3_version, ipc_regs + 0x8);
 
 	ret = omap_hwmod_deassert_hardreset(wkup_m3_oh, "wkup_m3");
 	if (ret) {

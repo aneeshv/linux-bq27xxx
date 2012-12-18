@@ -128,4 +128,6 @@ static struct am33xx_padconf_regs am33xx_lp_padconf[] = {
 #define CPU_REV_1		1
 #define CPU_REV_2		2
 
+#define M3_VERSION_UNKNOWN		0x0000ffff
+
 #endif
