@@ -103,12 +103,6 @@ static int beaglebone_lcd_avdd_en;
 int selected_pad;
 int pad_mux_value;
 
-#define LCD7_CAPE_NAME_2    "BeagleBone LCD7 CAPE"
-#define LCD7_CAPE_REV_A1    "00A1"
-#define LCD7_CAPE_REV_A2    "00A2"
-
-#define LCD3_CAPE_NAME		"BeagleBone LCD3 CAPE"
-
 static const struct display_panel disp_panel = {
 	WVGA,
 	32,
@@ -3251,16 +3245,15 @@ static void bone_setup_display_daughter_board(struct memory_accessor *m, void *c
 	{
 		pr_info("Detected a daughter card on BeagleBone..");
 
-		if (!strcmp(cape_eeprom_config.board_name, "BeagleBone LCD Cape") ||
-			!strncmp(cape_eeprom_config.board_name, LCD7_CAPE_NAME_2, sizeof(LCD7_CAPE_NAME_2) - 1)) {
+		if (!strncmp("BB-BONE-LCD7-01", cape_eeprom_config.part_no, 15)) {
 			pr_info("BeagleBone LCD7 cape board detected\n");
-			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
-			printk ("Hardware revision: %s\n", cape_eeprom_config.version);
+			pr_info("Board Name: %s\n", cape_eeprom_config.board_name);
+			pr_info("Hardware revision: %s\n", cape_eeprom_config.version);
 
-			if (!strncmp(cape_eeprom_config.version, LCD7_CAPE_REV_A1, sizeof(LCD7_CAPE_REV_A1) - 1))
+			if (!strncmp("00A1", cape_eeprom_config.version, 4))
 				/* rev A1 */
 				beaglebone_lcd_avdd_en = GPIO_TO_PIN(0, 7);
-			else if (!strncmp(cape_eeprom_config.version, LCD7_CAPE_REV_A2, sizeof(LCD7_CAPE_REV_A2) - 1))
+			else if (!strncmp("00A2", cape_eeprom_config.version, 4))
 				/* rev A2 */
 				beaglebone_lcd_avdd_en = GPIO_TO_PIN(1, 31);
 			else
@@ -3270,8 +3263,8 @@ static void bone_setup_display_daughter_board(struct memory_accessor *m, void *c
 			bone_lcd7_lcdc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			pr_info("BeagleBone cape: Registering PWM backlight for LCD cape\n");
 			enable_ehrpwm1(0,0);
-			if ((!strncmp(cape_eeprom_config.version, LCD7_CAPE_REV_A1, sizeof(LCD7_CAPE_REV_A1) - 1)) ||
-				(!strncmp(cape_eeprom_config.version, LCD7_CAPE_REV_A2, sizeof(LCD7_CAPE_REV_A2) - 1)))
+			if ((!strncmp("00A1", cape_eeprom_config.version, 4)) ||
+				(!strncmp("00A2", cape_eeprom_config.version, 4)))
 				lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			else
 				lcd7a3_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
@@ -3280,10 +3273,10 @@ static void bone_setup_display_daughter_board(struct memory_accessor *m, void *c
 
 			return;
 		}
-		else if (!strncmp(cape_eeprom_config.board_name, LCD3_CAPE_NAME, (sizeof(LCD3_CAPE_NAME)- 1))) {
+		else if (!strncmp("BB-BONE-LCD3-01", cape_eeprom_config.part_no, 15)) {
 			pr_info("BeagleBone LCD3 cape board detected\n");
-			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
-			printk ("Hardware revision: %s\n", cape_eeprom_config.version);
+			pr_info("Board Name: %s\n", cape_eeprom_config.board_name);
+			pr_info("Hardware revision: %s\n", cape_eeprom_config.version);
 
 			bone_lcd3_lcdc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
@@ -3293,10 +3286,10 @@ static void bone_setup_display_daughter_board(struct memory_accessor *m, void *c
 		}
 		else if (!strncmp("BB-BONE-LCD4-01", cape_eeprom_config.part_no, 15)) {
 			pr_info("BeagleBone LCD4 cape board detected\n");
-			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
-			printk ("Hardware revision: %s\n", cape_eeprom_config.version);
+			pr_info("Board Name: %s\n", cape_eeprom_config.board_name);
+			pr_info("Hardware revision: %s\n", cape_eeprom_config.version);
 
-			if (!strncmp("00A1", cape_eeprom_config.version,4)) {
+			if (!strncmp("00A1", cape_eeprom_config.version, 4)) {
 				beaglebone_lcd_avdd_en = GPIO_TO_PIN(3, 19);
 			}
 
