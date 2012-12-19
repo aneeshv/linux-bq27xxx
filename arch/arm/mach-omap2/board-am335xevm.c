@@ -221,6 +221,12 @@ struct da8xx_lcdc_platform_data CDTech_S035Q01_pdata = {
 	.type			= "CDTech_S035Q01",
 };
 
+struct da8xx_lcdc_platform_data  NHD_480272MF_ATXI_bone_lcd_cape_pdata = {
+	.manu_name              = "BBToys",
+	.controller_data        = &bone_lcd_cape_cfg,
+	.type                   = "NHD-4.3-ATXI#-T-1",
+};
+
 #include "common.h"
 
 #include <linux/lis3lv02d.h>
@@ -1258,6 +1264,82 @@ static void lcd7a3_cape_keys_init(int evm_id, int profile)
 		pr_err("Failed to register Keypad for Beaglebone LCD cape\n");
 }
 
+/* Pinmux for Beaglebone LCD4 cape keypad device */
+static struct pinmux_config lcd4_cape_keys_pin_mux[] = {
+	{"gpmc_a0.gpio1_16",	OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_a1.gpio1_17",	OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"gpmc_a3.gpio1_19",	OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"mcasp0_axr0.gpio3_16",OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{"uart1_txd.gpio0_15",	OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
+	{NULL, 0},
+};
+
+/* Configure GPIOs for Beaglebone LCD4 cape keys */
+static struct gpio_keys_button lcd4_cape_gpio_keys[] = {
+	{
+		.code                   = KEY_LEFT,
+		.gpio                   = GPIO_TO_PIN(1, 16),
+		.active_low             = true,
+		.desc                   = "left",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+	{
+		.code                   = KEY_RIGHT,
+		.gpio                   = GPIO_TO_PIN(1, 17),
+		.active_low             = true,
+		.desc                   = "right",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+	{
+		.code                   = KEY_UP,
+		.gpio                   = GPIO_TO_PIN(1, 19),
+		.active_low             = true,
+		.desc                   = "up",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+	{
+		.code                   = KEY_DOWN,
+		.gpio                   = GPIO_TO_PIN(3, 16),
+		.active_low             = true,
+		.desc                   = "down",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+	{
+		.code                   = KEY_ENTER,
+		.gpio                   = GPIO_TO_PIN(0, 15),
+		.active_low             = true,
+		.desc                   = "enter",
+		.type                   = EV_KEY,
+		.wakeup                 = 1,
+	},
+};
+
+static struct gpio_keys_platform_data lcd4_cape_gpio_key_info = {
+	.buttons        = lcd4_cape_gpio_keys,
+	.nbuttons       = ARRAY_SIZE(lcd4_cape_gpio_keys),
+};
+
+static struct platform_device lcd4_cape_keys = {
+	.name   = "gpio-keys",
+	.id     = -1,
+	.dev    = {
+		.platform_data  = &lcd4_cape_gpio_key_info,
+	},
+};
+
+static void lcd4_cape_keys_init(int evm_id, int profile)
+{
+	int err;
+	setup_pin_mux(lcd4_cape_keys_pin_mux);
+	err = platform_device_register(&lcd4_cape_keys);
+	if (err)
+		pr_err("Failed to register Keypad for Beaglebone LCD cape\n");
+}
+
 /*
 * @evm_id - evm id which needs to be configured
 * @dev_cfg - single evm structure which includes
@@ -1577,6 +1659,26 @@ static void bone_lcd3_lcdc_init(int evm_id, int profile)
 
 	if (am33xx_register_lcdc(&CDTech_S035Q01_pdata))
 		pr_info("Failed to register Beagleboardtoys 3.5\" LCD cape device\n");
+
+	return;
+}
+
+static void bone_lcd4_lcdc_init(int evm_id, int profile)
+{
+	setup_pin_mux(lcdc_pin_mux);
+	setup_pin_mux(lcd_cape_pin_mux);
+
+	if (conf_disp_pll(18000000)) {
+		pr_info("Failed to set pixclock to 18000000, not attempting to"
+				"register LCD cape\n");
+		return;
+	}
+
+	gpio_request(beaglebone_lcd_avdd_en, "BONE_LCD_AVDD_EN");
+	gpio_direction_output(beaglebone_lcd_avdd_en, 1);
+
+	if (am33xx_register_lcdc(&NHD_480272MF_ATXI_bone_lcd_cape_pdata))
+		pr_info("Failed to register Beagleboardtoys 4.3\" LCD cape device\n");
 
 	return;
 }
@@ -3185,6 +3287,22 @@ static void bone_setup_display_daughter_board(struct memory_accessor *m, void *c
 
 			bone_lcd3_lcdc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			lcd_cape_tsc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+
+			return;
+		}
+		else if (!strncmp("BB-BONE-LCD4-01", cape_eeprom_config.part_no, 15)) {
+			pr_info("BeagleBone LCD4 cape board detected\n");
+			printk ("Board Name: %s\n", cape_eeprom_config.board_name);
+			printk ("Hardware revision: %s\n", cape_eeprom_config.version);
+
+			if (!strncmp("00A1", cape_eeprom_config.version,4)) {
+				beaglebone_lcd_avdd_en = GPIO_TO_PIN(3, 19);
+			}
+
+			bone_lcd4_lcdc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
+			enable_ehrpwm1(0,0);
+			lcd4_cape_keys_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 			lcd_cape_tsc_init(DEV_ON_DGHTR_BRD, PROFILE_NONE);
 
 			return;
