@@ -238,9 +238,16 @@
 #define AM33XX_CONTROL_PADCONF_MUX_SIZE				\
 		(AM33XX_CONTROL_PADCONF_VREFN_OFFSET + 0x4)
 
+#define MAX_IO_PADCONF	((AM33XX_CONTROL_PADCONF_MUX_SIZE -	\
+				AM33XX_CONTROL_PADCONF_GPMC_AD0_OFFSET) / 4)
+
 #ifndef __ASSEMBLER__
 void am335x_save_padconf(void);
 void am335x_restore_padconf(void);
+
+struct dentry;
+void am33xx_mux_dbg_create_entry(struct dentry *mux_dbg_dir);
+void am33xx_setup_pinmux_on_suspend(void);
 #endif
 
 #endif

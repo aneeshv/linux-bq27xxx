@@ -79,6 +79,7 @@ static int am33xx_pm_prepare_late(void)
 	int ret = 0;
 
 	am335x_save_padconf();
+	am33xx_setup_pinmux_on_suspend();
 
 	return ret;
 }

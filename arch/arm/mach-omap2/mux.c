@@ -41,6 +41,7 @@
 
 #include "control.h"
 #include "mux.h"
+#include "mux33xx.h"
 #include "prm.h"
 
 #define OMAP_MUX_BASE_OFFSET		0x30	/* Offset from CTRL_BASE */
@@ -218,8 +219,7 @@ static int __init _omap_mux_get_by_name(struct omap_mux_partition *partition,
 	return -ENODEV;
 }
 
-static int __init
-omap_mux_get_by_name(const char *muxname,
+int omap_mux_get_by_name(const char *muxname,
 			struct omap_mux_partition **found_partition,
 			struct omap_mux **found_mux)
 {
@@ -814,6 +814,10 @@ static void __init omap_mux_dbg_init(void)
 					  mux_dbg_board_dir, partition,
 					  &omap_mux_dbg_board_fops);
 	}
+
+#ifdef CONFIG_SOC_OMAPAM33XX
+	(void)am33xx_mux_dbg_create_entry(mux_dbg_board_dir);
+#endif
 }
 
 #else

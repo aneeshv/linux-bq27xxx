@@ -16,6 +16,11 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/io.h>
+#include <linux/debugfs.h>
+#include <linux/slab.h>
+#include <linux/seq_file.h>
+#include <linux/uaccess.h>
+#include <linux/io.h>
 
 #include "control.h"
 #include "mux.h"
@@ -30,7 +35,7 @@
 }
 
 /* AM33XX pin mux super set */
-static struct omap_mux __initdata am33xx_muxmodes[] = {
+static struct omap_mux am33xx_muxmodes[] = {
 	_AM33XX_MUXENTRY(GPMC_AD0, 0,
 		"gpmc_ad0", "mmc1_dat0", NULL, NULL,
 		NULL, NULL, NULL, "gpio1_0"),
@@ -460,22 +465,272 @@ static struct am33xx_padconf_regs am33xx_lp_padconf[] = {
 };
 #endif /* CONFIG_SUSPEND */
 
+struct susp_io_pad_conf {
+	u32 enabled;
+	u32 val;
+};
+
+static u32 susp_io_pad_conf_enabled;
+static struct susp_io_pad_conf pad_array[MAX_IO_PADCONF];
+
+/*
+ * Expected input: 1/0
+ * Example: "echo 1 > enable_suspend_io_pad_conf" enables IO PAD Config
+ */
+static int susp_io_pad_enable_set(void *data, u64 val)
+{
+	u32 *enabled = data;
+
+	*enabled = val & 0x1;
+
+	return 0;
+}
+
+static int susp_io_pad_enable_get(void *data, u64 *val)
+{
+	u32 *enabled = data;
+
+	*val = *enabled;
+
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(susp_io_pad_enable_fops, susp_io_pad_enable_get,
+			susp_io_pad_enable_set, "%llx\n");
+
+static unsigned int am335x_pin_mux_addr_to_skip[] = {
+	0x9bc,
+	0x9c4, 0x9c8, 0x9cc,
+	0x9ec,
+	0x9f0, 0x9f4,
+	0xa08, 0xa0c,
+	0xa10, 0xa14, 0xa18,
+	0xa20, 0xa24, 0xa28, 0xa2c,
+	0xa30,
+};
+
+static int susp_io_pad_status_show(struct seq_file *s, void *unused)
+{
+	struct omap_mux *mux_arr = &am33xx_muxmodes[0];
+	u32 *enabled = s->private;
+	int i;
+
+	if (!*enabled) {
+		pr_err("%s: IO PAD Configuration is not enabled\n", __func__);
+		return 0;
+	}
+
+	for (i = 0; i < MAX_IO_PADCONF;) {
+		int off, j, addr_match = 0;
+
+		if (pad_array[i].enabled) {
+			int mode = pad_array[i].val & OMAP_MUX_MODE7;
+			seq_printf(s, "%s.%s (0x%08x = 0x%02x)\n",
+				mux_arr->muxnames[0], mux_arr->muxnames[mode],
+				(unsigned int)(AM33XX_CONTROL_PADCONF_MUX_PBASE
+				+ mux_arr->reg_offset),
+				pad_array[i].val);
+		}
+
+		i++;
+
+		/*
+		 * AM335x pin-mux register offset sequence is broken, meaning
+		 * there is no pin-mux setting at some offset and at some
+		 * offsets, the modes are not supposed to be changed. Because
+		 * of this, the "am33xx_muxmodes" array above will not have any
+		 * values at these indexes. Hence the pad_array &
+		 * am33xx_muxmodes array will be out of sync at these index.
+		 * Handle missing pin-mux entries accordingly by using a special
+		 * array that indicate these offsets.
+		 */
+		off = ((i * 4) + 0x800);
+		for (j = 0; j < ARRAY_SIZE(am335x_pin_mux_addr_to_skip); j++) {
+			if (off == am335x_pin_mux_addr_to_skip[j]) {
+				addr_match = 1;
+				break;
+			}
+		}
+		if (addr_match == 0)
+			mux_arr++;
+	}
+
+	return 0;
+}
+
+/*
+ * Expected input: pinmux_name=<value1>
+ *	pinmux_name = Pin-mux name that is to be setup during suspend with value
+ *		<value1>. Pin-mux name should be in "mode0_name.function_name"
+ *		format. Internally the pin-mux offset is calculated from the
+ *		pin-mux names. Invalid pin-mux names and values are ignored.
+ *		Remember, NO spaces anywhere in the input.
+ *
+ * Example:
+ *	  echo mcasp0_aclkx.gpio3_14=0x27 > suspend_pad_conf
+ *		stores 0x27 as the value to be written to the pinmux (with
+ *		mode0_name.function_name as mcasp0_aclkx.gpio3_14) when entering
+ *		suspend
+ */
+static ssize_t susp_io_pad_write(struct file *file,
+					 const char __user *user_buf,
+					 size_t count, loff_t *ppos)
+{
+	struct seq_file *seqf;
+	u32 *enabled, val;
+	char *export_string, *token, *name;
+
+	seqf = file->private_data;
+	enabled = seqf->private;
+
+	if (!*enabled) {
+		pr_err("%s: IO PAD Configuration is not enabled\n", __func__);
+		return -EINVAL;
+	}
+
+	export_string = kzalloc(count + 1, GFP_KERNEL);
+	if (!export_string)
+		return -ENOMEM;
+
+	if (copy_from_user(export_string, user_buf, count)) {
+		kfree(export_string);
+		return -EFAULT;
+	}
+
+	token = export_string;
+	name = strsep(&token, "=");
+	if (name) {
+		struct omap_mux_partition *partition = NULL;
+		struct omap_mux *mux = NULL;
+		int mux_index, mux_mode;
+		int res;
+
+		mux_mode = omap_mux_get_by_name(name, &partition, &mux);
+		if (mux_mode < 0) {
+			pr_err("%s: Invalid mux name (%s). Ignoring the"
+					" value\n", __func__, name);
+			goto err_out;
+		}
+
+		res = kstrtouint(token, 0, &val);
+		if (res < 0) {
+			pr_err("%s: Invalid value (%s). Ignoring\n",
+						__func__, token);
+			goto err_out;
+		}
+
+		mux_index = (mux->reg_offset -
+			AM33XX_CONTROL_PADCONF_GPMC_AD0_OFFSET) / 4;
+
+		if (mux_index > MAX_IO_PADCONF) {
+			pr_err("%s: Invalid index (0x%x). Ignoring\n",
+						__func__, mux_index);
+			goto err_out;
+		}
+
+		pad_array[mux_index].enabled = true;
+		pad_array[mux_index].val = val;
+	} else {
+		pr_err("%s: Invalid mux name (%s). Ignoring the entry\n",
+						__func__, export_string);
+	}
+
+err_out:
+	*ppos += count;
+	kfree(export_string);
+	return count;
+}
+
+static int susp_io_pad_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, susp_io_pad_status_show, inode->i_private);
+}
+
+static const struct file_operations susp_io_pad_fops = {
+	.open		= susp_io_pad_open,
+	.read		= seq_read,
+	.write		= susp_io_pad_write,
+	.release	= single_release,
+};
+
+void am33xx_mux_dbg_create_entry(struct dentry *mux_dbg_dir)
+{
+	struct dentry *mux_dbg_suspend_io_conf_dir;
+
+	if (!mux_dbg_dir)
+		return;
+
+	/*
+	 * create a directory by the name suspend_io_pad_conf in
+	 * <debugfs-mount-dir>/<mux_dbg_dir>/
+	 */
+	mux_dbg_suspend_io_conf_dir = debugfs_create_dir("suspend_io_pad_conf",
+								mux_dbg_dir);
+	if (!mux_dbg_suspend_io_conf_dir)
+		return;
+
+	memset(pad_array, 0, sizeof(pad_array));
+
+	(void)debugfs_create_file("enable_suspend_io_pad_conf",
+						S_IRUGO | S_IWUSR,
+						mux_dbg_suspend_io_conf_dir,
+						&susp_io_pad_conf_enabled,
+						&susp_io_pad_enable_fops);
+	(void)debugfs_create_file("suspend_pad_conf", S_IRUGO | S_IWUSR,
+						mux_dbg_suspend_io_conf_dir,
+						&susp_io_pad_conf_enabled,
+						&susp_io_pad_fops);
+}
+
+void am33xx_setup_pinmux_on_suspend(void)
+{
+	u32 reg_off, i;
+
+	if (susp_io_pad_conf_enabled == 1) {
+		reg_off = AM33XX_CONTROL_PADCONF_GPMC_AD0_OFFSET;
+		for (i = 0; i < MAX_IO_PADCONF; reg_off += 4, i++) {
+			if (pad_array[i].enabled)
+				writel(pad_array[i].val,
+						AM33XX_CTRL_REGADDR(reg_off));
+		}
+	}
+}
+
+static u32 am33xx_lp_padconf_complete[MAX_IO_PADCONF];
+
 void am335x_save_padconf(void)
 {
 	struct am33xx_padconf_regs *temp = am33xx_lp_padconf;
+	u32 reg_off;
 	int i;
+	if (susp_io_pad_conf_enabled == 1) {
+		i = AM33XX_CONTROL_PADCONF_GPMC_AD0_OFFSET;
+		reg_off = 0;
 
-	for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
-		temp->val = readl(AM33XX_CTRL_REGADDR(temp->offset));
+		for (; i < AM33XX_CONTROL_PADCONF_MUX_SIZE; i += 4, reg_off++)
+			am33xx_lp_padconf_complete[reg_off] =
+						readl(AM33XX_CTRL_REGADDR(i));
+	} else {
+		for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
+			temp->val = readl(AM33XX_CTRL_REGADDR(temp->offset));
+	}
 }
 
 void am335x_restore_padconf(void)
 {
 	struct am33xx_padconf_regs *temp = am33xx_lp_padconf;
+	u32 reg_off;
 	int i;
-
-	for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
-		writel(temp->val, AM33XX_CTRL_REGADDR(temp->offset));
+	if (susp_io_pad_conf_enabled == 1) {
+		i = AM33XX_CONTROL_PADCONF_GPMC_AD0_OFFSET;
+		reg_off = 0;
+		for (; i < AM33XX_CONTROL_PADCONF_MUX_SIZE; i += 4, reg_off++)
+			writel(am33xx_lp_padconf_complete[reg_off],
+							AM33XX_CTRL_REGADDR(i));
+	} else {
+		for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
+			writel(temp->val, AM33XX_CTRL_REGADDR(temp->offset));
+	}
 }
 
 #else
