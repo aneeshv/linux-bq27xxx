@@ -122,11 +122,6 @@
 
 #define TSCADC_CELLS			2
 
-enum tscadc_cells {
-	TSC_CELL,
-	ADC_CELL,
-};
-
 struct mfd_tscadc_board {
 	struct tsc_data *tsc_init;
 	struct adc_data *adc_init;

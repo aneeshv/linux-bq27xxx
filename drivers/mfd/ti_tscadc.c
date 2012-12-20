@@ -53,9 +53,9 @@ static int __devinit ti_tscadc_probe(struct platform_device *pdev)
 	struct clk		*clk;
 	struct mfd_tscadc_board	*pdata = pdev->dev.platform_data;
 	struct mfd_cell		*cell;
-	int			err, ctrl;
+	int			err, ctrl, children = 0;
 	int			clk_value, clock_rate;
-	int			tsc_wires, adc_channels = 0, total_channels;
+	int			tsc_wires = 0, adc_channels = 0, total_channels;
 
 	if (!pdata) {
 		dev_err(&pdev->dev, "Could not find platform data\n");
@@ -65,7 +65,9 @@ static int __devinit ti_tscadc_probe(struct platform_device *pdev)
 	if (pdata->adc_init)
 		adc_channels = pdata->adc_init->adc_channels;
 
-	tsc_wires = pdata->tsc_init->wires;
+	if (pdata->tsc_init)
+		tsc_wires = pdata->tsc_init->wires;
+
 	total_channels = tsc_wires + adc_channels;
 
 	if (total_channels > 8) {
@@ -154,19 +156,25 @@ static int __devinit ti_tscadc_probe(struct platform_device *pdev)
 	tscadc_writel(tscadc, TSCADC_REG_CTRL, ctrl);
 
 	/* TSC Cell */
-	cell = &tscadc->cells[TSC_CELL];
-	cell->name = "tsc";
-	cell->platform_data = tscadc;
-	cell->pdata_size = sizeof(*tscadc);
+	if (pdata->tsc_init) {
+		cell = &tscadc->cells[children];
+		cell->name = "tsc";
+		cell->platform_data = tscadc;
+		cell->pdata_size = sizeof(*tscadc);
+		children++;
+	}
 
 	/* ADC Cell */
-	cell = &tscadc->cells[ADC_CELL];
-	cell->name = "tiadc";
-	cell->platform_data = tscadc;
-	cell->pdata_size = sizeof(*tscadc);
+	if (pdata->adc_init) {
+		cell = &tscadc->cells[children];
+		cell->name = "tiadc";
+		cell->platform_data = tscadc;
+		cell->pdata_size = sizeof(*tscadc);
+		children++;
+	}
 
 	err = mfd_add_devices(&pdev->dev, pdev->id, tscadc->cells,
-			TSCADC_CELLS, NULL, 0);
+			children, NULL, 0);
 	if (err < 0)
 		goto err_fail;
 
