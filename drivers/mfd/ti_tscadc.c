@@ -142,13 +142,15 @@ static int __devinit ti_tscadc_probe(struct platform_device *pdev)
 
 	/* Set the control register bits */
 	ctrl = TSCADC_CNTRLREG_STEPCONFIGWRT |
-			TSCADC_CNTRLREG_TSCENB |
-			TSCADC_CNTRLREG_STEPID |
-			TSCADC_CNTRLREG_4WIRE;
+			TSCADC_CNTRLREG_STEPID;
+	if (pdata->tsc_init)
+		ctrl |= TSCADC_CNTRLREG_4WIRE |
+				TSCADC_CNTRLREG_TSCENB;
 	tscadc_writel(tscadc, TSCADC_REG_CTRL, ctrl);
 
 	/* Set register bits for Idle Config Mode */
-	tscadc_idle_config(tscadc);
+	if (pdata->tsc_init)
+		tscadc_idle_config(tscadc);
 
 	/* Enable the TSC module enable bit */
 	ctrl = tscadc_readl(tscadc, TSCADC_REG_CTRL);
@@ -227,17 +229,22 @@ static int tscadc_suspend(struct platform_device *pdev, pm_message_t state)
 static int tscadc_resume(struct platform_device *pdev)
 {
 	struct ti_tscadc_dev	*tscadc_dev = platform_get_drvdata(pdev);
+	struct mfd_tscadc_board	*pdata = pdev->dev.platform_data;
 	unsigned int restore, ctrl;
 
 	pm_runtime_get_sync(&pdev->dev);
 
 	/* context restore */
 	ctrl = TSCADC_CNTRLREG_STEPCONFIGWRT |
-			TSCADC_CNTRLREG_TSCENB |
-			TSCADC_CNTRLREG_STEPID |
-			TSCADC_CNTRLREG_4WIRE;
+			TSCADC_CNTRLREG_STEPID;
+
+	if (pdata->tsc_init)
+		ctrl |= TSCADC_CNTRLREG_4WIRE |
+				TSCADC_CNTRLREG_TSCENB;
 	tscadc_writel(tscadc_dev, TSCADC_REG_CTRL, ctrl);
-	tscadc_idle_config(tscadc_dev);
+
+	if (pdata->tsc_init)
+		tscadc_idle_config(tscadc_dev);
 	tscadc_writel(tscadc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
 	restore = tscadc_readl(tscadc_dev, TSCADC_REG_CTRL);
 	tscadc_writel(tscadc_dev, TSCADC_REG_CTRL,
