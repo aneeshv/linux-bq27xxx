@@ -75,7 +75,7 @@ static void adc_step_config(struct adc_device *adc_dev)
 static int tiadc_channel_init(struct iio_dev *idev, struct adc_device *adc_dev)
 {
 	struct iio_chan_spec *chan_array;
-	int i;
+	int i, channels;
 
 	idev->num_channels = adc_dev->channels;
 	chan_array = kcalloc(idev->num_channels, sizeof(struct iio_chan_spec),
@@ -84,15 +84,17 @@ static int tiadc_channel_init(struct iio_dev *idev, struct adc_device *adc_dev)
 	if (chan_array == NULL)
 		return -ENOMEM;
 
+	channels = TOTAL_CHANNELS - adc_dev->channels;
 	for (i = 0; i < (idev->num_channels); i++) {
 		struct iio_chan_spec *chan = chan_array + i;
 		chan->type = IIO_VOLTAGE;
 		chan->indexed = 1;
-		chan->channel = i;
+		chan->channel = channels;
 		chan->scan_type.sign = 'u';
 		chan->scan_type.realbits = 12;
 		chan->scan_type.storagebits = 32;
 		chan->scan_type.shift = 0;
+		channels++;
 	}
 
 	idev->channels = chan_array;
