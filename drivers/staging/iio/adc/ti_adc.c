@@ -69,7 +69,6 @@ static void adc_step_config(struct adc_device *adc_dev)
 				TSCADC_STEPCONFIG_OPENDLY);
 		channels++;
 	}
-	adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
 }
 
 static int tiadc_channel_init(struct iio_dev *idev, struct adc_device *adc_dev)
@@ -111,18 +110,31 @@ static int tiadc_read_raw(struct iio_dev *idev,
 		int *val, int *val2, long mask)
 {
 	struct adc_device *adc_dev = iio_priv(idev);
-	int i;
-	unsigned int fifo1count, readx1;
+	int i, map_val;
+	unsigned int fifo1count, readx1, stepid;
+	unsigned long timeout = jiffies + usecs_to_jiffies
+			(IDLE_TIMEOUT * adc_dev->channels);
 
+	adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
+
+	/* Wait for ADC sequencer to complete sampling */
+	while (adc_readl(adc_dev, TSCADC_REG_ADCFSM) & TSCADC_SEQ_STATUS) {
+		if (time_after(jiffies, timeout))
+			return -EAGAIN;
+	}
+
+	map_val = chan->channel + TOTAL_CHANNELS;
 	fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
 	for (i = 0; i < fifo1count; i++) {
 		readx1 = adc_readl(adc_dev, TSCADC_REG_FIFO1);
-		if (i == chan->channel) {
-			readx1 = readx1 & 0xfff;
+		stepid = readx1 & TSCADC_FIFOREAD_CHNLID_MASK;
+		stepid = stepid >> 0x10;
+
+		if (stepid == map_val) {
+			readx1 = readx1 & TSCADC_FIFOREAD_DATA_MASK;
 			*val = readx1;
 		}
 	}
-	adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
 	return IIO_VAL_INT;
 }
 
