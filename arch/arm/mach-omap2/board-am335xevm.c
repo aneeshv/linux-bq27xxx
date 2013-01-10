@@ -317,8 +317,8 @@ static struct snd_platform_data am335x_evm_snd_data1 = {
 	.serial_dir	= am335x_iis_serializer_direction1,
 	.asp_chan_q	= EVENTQ_2,
 	.version	= MCASP_VERSION_3,
-	.txnumevt	= 1,
-	.rxnumevt	= 1,
+	.txnumevt	= 32,
+	.rxnumevt	= 32,
 };
 
 static u8 am335x_evm_sk_iis_serializer_direction1[] = {
@@ -337,7 +337,7 @@ static struct snd_platform_data am335x_evm_sk_snd_data1 = {
 	.serial_dir	= am335x_evm_sk_iis_serializer_direction1,
 	.asp_chan_q	= EVENTQ_2,
 	.version	= MCASP_VERSION_3,
-	.txnumevt	= 1,
+	.txnumevt	= 32,
 };
 
 static struct omap2_hsmmc_info am335x_mmc[] __initdata = {
