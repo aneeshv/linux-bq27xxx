@@ -295,6 +295,8 @@
 
 #define DAVINCI_MCASP_NUM_SERIALIZER	16
 
+static void mcasp_stop_tx(struct davinci_audio_dev *dev);
+
 static inline void mcasp_set_bits(void __iomem *reg, u32 val)
 {
 	__raw_writel(__raw_readl(reg) | val, reg);
@@ -438,6 +440,10 @@ static void mcasp_stop_rx(struct davinci_audio_dev *dev)
 {
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_GBLCTLR_REG, 0);
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_RXSTAT_REG, 0xFFFFFFFF);
+
+	printk(KERN_ALERT "%s: %s: %d: Stop tx as well\n", __FILE__,__FUNCTION__,__LINE__);
+	mcasp_stop_tx(dev);
+
 }
 
 static void mcasp_stop_tx(struct davinci_audio_dev *dev)
@@ -794,10 +800,15 @@ static void davinci_hw_param(struct davinci_audio_dev *dev, int stream)
 			AHCLKRE);
 		mcasp_set_reg(dev->base + DAVINCI_MCASP_RXTDM_REG, mask);
 
-		if ((dev->tdm_slots >= 2) && (dev->tdm_slots <= 32))
+		if ((dev->tdm_slots >= 2) && (dev->tdm_slots <= 32)){
 			mcasp_mod_bits(dev->base + DAVINCI_MCASP_RXFMCTL_REG,
 					FSRMOD(dev->tdm_slots), FSRMOD(0x1FF));
-		else
+
+			/*for ASYNC = 0 case*/
+			printk (KERN_ALERT "ASYNC case .........................\n");
+			mcasp_mod_bits(dev->base + DAVINCI_MCASP_TXFMCTL_REG,
+					FSXMOD(dev->tdm_slots), FSXMOD(0x1FF));
+		}else
 			printk(KERN_ERR "capture tdm slot %d not supported\n",
 				dev->tdm_slots);
 
