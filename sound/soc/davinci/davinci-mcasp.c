@@ -529,8 +529,6 @@ static int davinci_mcasp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 						mcasp_clr_bits(dev->base+DAVINCI_MCASP_TXFMCTL_REG, FSXDUR);
 						mcasp_clr_bits(dev->base+DAVINCI_MCASP_RXFMCTL_REG, FSRDUR);
 
-				       /* make 1st data bit occur one ACLK cycle after the frame sync */
-						mcasp_set_bits(dev->base+DAVINCI_MCASP_RXFMT_REG, FSRDLY(1));
 						break;
 				default:
 						/* configure a full-word SYNC pulse (LRCLK) */
@@ -543,9 +541,13 @@ static int davinci_mcasp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 						break;
 		}
 
+
 		switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
 				case SND_SOC_DAIFMT_CBS_CFS:
 		/* codec is clock and frame slave */
+		printk("%s:%s: %d\n", __FILE__,__FUNCTION__, __LINE__);
+		mcasp_set_bits(dev->base+DAVINCI_MCASP_RXFMT_REG, FSRDLY(1));
+
 		mcasp_set_bits(base + DAVINCI_MCASP_ACLKXCTL_REG, ACLKXE);
 		mcasp_set_bits(base + DAVINCI_MCASP_TXFMCTL_REG, AFSXE);
 
