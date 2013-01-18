@@ -386,15 +386,12 @@ static void mcasp_start_tx(struct davinci_audio_dev *dev)
 		}
 	}
 
-	printk(KERN_WARNING "[davinci_mcasp_start]:serializer offerse %d",offset);
 	/* wait for TX ready */
 	cnt = 0;
 	while (!(mcasp_get_reg(dev->base + DAVINCI_MCASP_XRSRCTL_REG(offset)) &
 		 TXSTATE) && (cnt < 100000))
 		cnt++;
 
-	printk(KERN_WARNING "[davinci_mcasp_start]:wait for tx reday is over %d",cnt);
-	printk(KERN_WARNING "[davinci_mcasp_start]:sample rate: %d",dev->sample_rate);
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_TXBUF_REG, 0);
 }
 
@@ -414,8 +411,6 @@ static void davinci_mcasp_start(struct davinci_audio_dev *dev, int stream)
 								FIFO_ENABLE);
 			}
 		}
-		printk(KERN_WARNING "!!!!!!!!!!!!!!!!!davinci_mcasp_start %8x",dev->base);
-
 		mcasp_start_tx(dev);
 	} else {
 		if (dev->rxnumevt) {	/* flush and enable FIFO */
@@ -440,7 +435,6 @@ static void mcasp_stop_rx(struct davinci_audio_dev *dev)
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_GBLCTLR_REG, 0);
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_RXSTAT_REG, 0xFFFFFFFF);
 
-	printk(KERN_ALERT "%s: %s: %d: Stop tx as well\n", __FILE__,__FUNCTION__,__LINE__);
 	mcasp_stop_tx(dev);
 
 }
@@ -478,7 +472,6 @@ static void davinci_mcasp_stop(struct davinci_audio_dev *dev, int stream)
 static int davinci_mcasp_set_clkdiv(struct snd_soc_dai *dai, int div_id, int div)
 {
 		struct davinci_audio_dev *dev = snd_soc_dai_get_drvdata(dai);
-		printk(KERN_WARNING "[davinci-mcasp]:div_id:%d,div:%d",div_id,div);
 		switch (div_id) {
 				case 0:		/* MCLK divider */
 						mcasp_mod_bits(dev->base + DAVINCI_MCASP_AHCLKXCTL_REG,
@@ -806,7 +799,6 @@ static void davinci_hw_param(struct davinci_audio_dev *dev, int stream)
 					FSRMOD(dev->tdm_slots), FSRMOD(0x1FF));
 
 			/*for ASYNC = 0 case*/
-			printk (KERN_ALERT "ASYNC case .........................\n");
 			mcasp_mod_bits(dev->base + DAVINCI_MCASP_TXFMCTL_REG,
 					FSXMOD(dev->tdm_slots), FSXMOD(0x1FF));
 		}else
@@ -861,7 +853,6 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 	int word_length;
 	u8 fifo_level;
 
-	printk(KERN_WARNING "!!!!davinci_mcasp_hw_params:%d",params_format(params));
 	davinci_hw_common_param(dev, substream->stream);
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		fifo_level = dev->txnumevt;
@@ -1086,9 +1077,7 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 	else
 		/* first TX, then RX */
 		res = platform_get_resource(pdev, IORESOURCE_DMA, 0);
-	printk(KERN_WARNING "[davinci-mcasp]:dma_addr onproble:%8x",dma_data->dma_addr);
 	if (!res) {
-		printk(KERN_WARNING "!!!!!1 No DMA resource.....!!!!!!!");
 		dev_err(&pdev->dev, "no DMA resource\n");
 		ret = -ENODEV;
 		goto err_iounmap;
@@ -1112,7 +1101,6 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 		res = platform_get_resource(pdev, IORESOURCE_DMA, 1);
 
 	if (!res) {
-		printk(KERN_WARNING "!!!!!1 No DMA resource.....!!!!!!!");
 		dev_err(&pdev->dev, "no DMA resource\n");
 		ret = -ENODEV;
 		goto err_iounmap;
@@ -1125,7 +1113,6 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 	if (ret != 0)
 		goto err_iounmap;
 
-	printk(KERN_WARNING "!!!!!1 returning zero.....!!!!!!!");
 	return 0;
 
 err_iounmap:
