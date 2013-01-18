@@ -703,6 +703,12 @@ static void otg_timer(unsigned long _musb)
 		}
 		break;
 	case OTG_STATE_A_WAIT_VFALL:
+		if (!(devctl & MUSB_DEVCTL_SESSION)) {
+			devctl |= MUSB_DEVCTL_SESSION;
+			musb_writeb(musb->mregs, MUSB_DEVCTL, devctl);
+
+			devctl = musb_readb(musb->mregs, MUSB_DEVCTL);
+		}
 		/*
 		 * Wait till VBUS falls below SessionEnd (~0.2 V); the 1.3
 		 * RTL seems to mis-handle session "start" otherwise (or in
@@ -715,7 +721,7 @@ static void otg_timer(unsigned long _musb)
 			break;
 		}
 		musb->xceiv->state = OTG_STATE_A_WAIT_VRISE;
-		musb_writel(musb->ctrl_base, USB_CORE_INTR_SET_REG,
+		musb_writel(musb->ctrl_base, USB_IRQ_STATUS_RAW_1,
 			    MUSB_INTR_VBUSERROR << USB_INTR_USB_SHIFT);
 		break;
 	case OTG_STATE_B_IDLE:
@@ -1026,6 +1032,7 @@ static irqreturn_t ti81xx_interrupt(int irq, void *hci)
 	u32 pend1 = 0, pend2 = 0;
 	u32 epintr, usbintr;
 	u8  is_babble = 0;
+	int err;
 
 	spin_lock_irqsave(&musb->lock, flags);
 
@@ -1093,14 +1100,14 @@ static irqreturn_t ti81xx_interrupt(int irq, void *hci)
 		ERR("CAUTION: musb%d: Babble Interrupt Occured\n", musb->id);
 	}
 
-	if (usbintr & (USB_INTR_DRVVBUS << USB_INTR_USB_SHIFT)) {
+	err = is_host_enabled(musb) && (musb->int_usb &
+			MUSB_INTR_VBUSERROR);
+
+	if (err || (usbintr & (USB_INTR_DRVVBUS << USB_INTR_USB_SHIFT))) {
 		int drvvbus = musb_readl(reg_base, USB_STAT_REG);
 		void __iomem *mregs = musb->mregs;
 		u8 devctl = musb_readb(mregs, MUSB_DEVCTL);
-		int err;
 
-		err = is_host_enabled(musb) && (musb->int_usb &
-						MUSB_INTR_VBUSERROR);
 		if (err) {
 			/*
 			 * The Mentor core doesn't debounce VBUS as needed
