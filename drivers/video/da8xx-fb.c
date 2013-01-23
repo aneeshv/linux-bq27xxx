@@ -899,6 +899,12 @@ static irqreturn_t lcdc_irq_handler_rev02(int irq, void *arg)
 			if (vsync_cb_handler)
 				vsync_cb_handler(vsync_cb_arg);
 		}
+		if (stat & LCD_SYNC_LOST) {
+			printk(KERN_ERR "LCDC sync lost\n");
+			lcd_disable_raster(NO_WAIT_FOR_FRAME_DONE);
+			lcdc_write(stat, LCD_MASKED_STAT_REG);
+			lcd_enable_raster();
+		}
 	}
 
 	lcdc_write(0, LCD_END_OF_INT_IND_REG);
