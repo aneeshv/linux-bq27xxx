@@ -58,6 +58,7 @@
 #include <asm/hardware/asp.h>
 
 #include <plat/omap_device.h>
+#include <plat/omap-pm.h>
 #include <plat/irqs.h>
 #include <plat/board.h>
 #include <plat/common.h>
@@ -1602,6 +1603,8 @@ static void lcdc_init(int evm_id, int profile)
 		pr_err("LCDC not supported on this evm (%d)\n",evm_id);
 		return;
 	}
+
+	lcdc_pdata->get_context_loss_count = omap_pm_get_dev_context_loss_count;
 
 	if (am33xx_register_lcdc(lcdc_pdata))
 		pr_info("Failed to register LCDC device\n");
