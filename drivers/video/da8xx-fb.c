@@ -184,6 +184,7 @@ struct da8xx_fb_par {
 	wait_queue_head_t	vsync_wait;
 	int			vsync_flag;
 	int			vsync_timeout;
+	int			context_loss_cnt;
 	spinlock_t		lock_for_chan_update;
 
 	/*
@@ -1641,6 +1642,8 @@ static int fb_suspend(struct platform_device *dev, pm_message_t state)
 {
 	struct fb_info *info = platform_get_drvdata(dev);
 	struct da8xx_fb_par *par = info->par;
+	struct da8xx_lcdc_platform_data *fb_pdata =
+				dev->dev.platform_data;
 
 	console_lock();
 
@@ -1650,6 +1653,10 @@ static int fb_suspend(struct platform_device *dev, pm_message_t state)
 
 	fb_set_suspend(info, 1);
 	lcd_disable_raster(WAIT_FOR_FRAME_DONE);
+
+	if (fb_pdata->get_context_loss_count)
+		par->context_loss_cnt =
+			fb_pdata->get_context_loss_count(&dev->dev);
 	lcd_context_save();
 
 	pm_runtime_put(&dev->dev);
@@ -1661,13 +1668,30 @@ static int fb_resume(struct platform_device *dev)
 {
 	struct fb_info *info = platform_get_drvdata(dev);
 	struct da8xx_fb_par *par = info->par;
+	struct da8xx_lcdc_platform_data *fb_pdata = dev->dev.platform_data;
+	int loss_cnt;
 
 	console_lock();
 
 	pm_runtime_get_sync(&dev->dev);
 
+	if (fb_pdata->get_context_loss_count) {
+		loss_cnt =
+			fb_pdata->get_context_loss_count(&dev->dev);
+		if (loss_cnt < 0) {
+			dev_err(&dev->dev,
+				"%s failed, context loss count  = %d\n",
+				__func__, loss_cnt);
+		} else if (par->context_loss_cnt == loss_cnt) {
+			goto skip_context_restore;
+		}
+	}
+
+	/* Sleep is required inorder to avoid underflow error */
 	msleep(1);
 	lcd_context_restore();
+
+skip_context_restore:
 	lcd_enable_raster();
 
 	if (par->panel_power_ctrl)
