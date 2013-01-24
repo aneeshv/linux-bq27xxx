@@ -31,6 +31,7 @@
 #include <mach/am35xx.h>
 #include <plat/usb.h>
 #include <plat/omap_device.h>
+#include <plat/omap-pm.h>
 #include "mux.h"
 
 static struct musb_hdrc_config musb_config = {
@@ -122,6 +123,9 @@ void __init usb_musb_init(struct omap_musb_board_data *musb_board_data)
 		oh_name = "usb_otg_hs";
 		name = "musb-omap2430";
 	}
+
+	board_data->get_context_loss_count =
+		omap_pm_get_dev_context_loss_count;
 
         oh = omap_hwmod_lookup(oh_name);
         if (WARN(!oh, "%s: could not find omap_hwmod for %s\n",
