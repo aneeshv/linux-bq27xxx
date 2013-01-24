@@ -97,6 +97,7 @@ struct omap_musb_board_data {
 	void	(*clear_irq)(void);
 	void	(*set_mode)(u8 mode);
 	void	(*reset)(void);
+	int	(*get_context_loss_count)(struct device *);
 };
 
 enum musb_interface    {MUSB_INTERFACE_ULPI, MUSB_INTERFACE_UTMI};

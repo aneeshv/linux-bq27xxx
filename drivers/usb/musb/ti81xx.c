@@ -93,6 +93,7 @@ struct ti81xx_glue {
 	struct platform_device *musb[2];/* child musb pdevs */
 	u8	irq;			/* usbss irq */
 	u8	first;			/* ignore first call of resume */
+	int	context_loss_cnt;
 
 #ifdef CONFIG_PM
 	struct ti81xx_usbss_regs usbss_regs;
@@ -1830,6 +1831,10 @@ static int ti81xx_runtime_suspend(struct device *dev)
 	struct platform_device *pdev;
 	int i;
 
+	if (data->get_context_loss_count)
+		glue->context_loss_cnt =
+				data->get_context_loss_count(glue->dev);
+
 	/* save wrappers and cppi4.1 dma register */
 	ti81xx_save_context(glue);
 
@@ -1855,7 +1860,7 @@ static int ti81xx_runtime_resume(struct device *dev)
 	struct ti81xx_glue *glue = dev_get_drvdata(dev);
 	struct musb_hdrc_platform_data *plat = dev->platform_data;
 	struct omap_musb_board_data *data = plat->board_data;
-	int i;
+	int i, loss_cnt;
 
 	/*
 	 * ignore first call of resume as all registers are not yet
@@ -1870,6 +1875,16 @@ static int ti81xx_runtime_resume(struct device *dev)
 	for (i = 0; i <= data->instances; ++i) {
 		if (data->set_phy_power)
 			data->set_phy_power(i, 1, false);
+	}
+
+	if (data->get_context_loss_count) {
+		loss_cnt = data->get_context_loss_count(glue->dev);
+		if (loss_cnt < 0) {
+			dev_err(dev, "%s failed, countext loss count = %d\n",
+					__func__, loss_cnt);
+		} else if (glue->context_loss_cnt == loss_cnt) {
+			return 0;
+		}
 	}
 
 	/* restore wrappers and cppi4.1 dma register */
