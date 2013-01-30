@@ -583,7 +583,13 @@ static unsigned cppi41_next_tx_segment(struct cppi41_channel *tx_ch)
 	u16 tx_comp_q = cppi_info->tx_comp_q[tx_ch->ch_num];
 	u8 en_bd_intr = cppi->en_bd_intr;
 	struct musb_hw_ep *hw_ep = cppi->musb->endpoints + tx_ch->end_pt->epnum;
+	u32 residue;
 
+	if (length > 128) {
+		residue = length % tx_ch->pkt_size;
+		if (residue <= 128)
+			length -= residue;
+	}
 	/*
 	 * Tx can use the generic RNDIS mode where we can probably fit this
 	 * transfer in one PD and one IRQ.  The only time we would NOT want
@@ -1385,7 +1391,7 @@ void txdma_completion_work(struct work_struct *data)
 	while (1) {
 		for (index = 0; index < USB_CPPI41_NUM_CH; index++) {
 			void __iomem *epio;
-			u16 csr;
+			u16 csr, len = 0;
 
 			tx_ch = &cppi->tx_cppi_ch[index];
 			if (tx_ch->tx_complete) {
@@ -1414,6 +1420,15 @@ void txdma_completion_work(struct work_struct *data)
 						resched = 1;
 						continue;
 					}
+
+					len = tx_ch->length -
+						tx_ch->curr_offset;
+					if (len > 0) {
+						tx_ch->tx_complete = 0;
+						cppi41_next_tx_segment(tx_ch);
+						continue;
+					}
+
 					tx_ch->channel.status =
 						MUSB_DMA_STATUS_FREE;
 					tx_ch->tx_complete = 0;
@@ -1578,6 +1593,7 @@ static void usb_process_tx_queue(struct cppi41 *cppi, unsigned index)
 		struct cppi41_channel *tx_ch;
 		u8 ch_num, ep_num;
 		u32 length;
+		u32 sched_work = 0;
 
 		curr_pd = usb_get_pd_ptr(cppi, pd_addr);
 		if (curr_pd == NULL) {
@@ -1600,9 +1616,9 @@ static void usb_process_tx_queue(struct cppi41 *cppi, unsigned index)
 		usb_put_free_pd(cppi, curr_pd);
 
 		if ((tx_ch->curr_offset < tx_ch->length) ||
-		    (tx_ch->transfer_mode && !tx_ch->zlp_queued))
-			cppi41_next_tx_segment(tx_ch);
-		else if (tx_ch->channel.actual_len >= tx_ch->length) {
+		    (tx_ch->transfer_mode && !tx_ch->zlp_queued)) {
+			sched_work = 1;
+		} else if (tx_ch->channel.actual_len >= tx_ch->length) {
 			void __iomem *epio;
 			u16 csr;
 
@@ -1631,21 +1647,35 @@ static void usb_process_tx_queue(struct cppi41 *cppi, unsigned index)
 				musb_dma_completion(cppi->musb, ep_num, 1);
 			} else {
 				int residue;
+				int musb_completion = 0;
 
 				residue = tx_ch->channel.actual_len %
 						tx_ch->pkt_size;
 
-				if (tx_ch->pkt_size > 128 && !residue) {
+				if (is_peripheral_active(musb) &&
+					csr & MUSB_TXCSR_TXPKTRDY) {
+					musb_completion = 1;
+				} else if (is_host_active(musb) &&
+					tx_ch->pkt_size > 128 && !residue) {
+					musb_completion = 1;
+				} else
+					sched_work = 1;
+
+				if (musb_completion) {
+					dev_dbg(musb->controller, "txpktrdy on"
+						" dma complete ep%d\n", ep_num);
 					tx_ch->channel.status =
 						MUSB_DMA_STATUS_FREE;
 					musb_dma_completion(cppi->musb,
 						ep_num, 1);
-				} else {
-					tx_ch->tx_complete = 1;
-					tx_ch->count = 1;
-					schedule_work(&cppi->txdma_work);
 				}
 			}
+		}
+		if (sched_work) {
+			sched_work = 0;
+			tx_ch->tx_complete = 1;
+			tx_ch->count = 1;
+			schedule_work(&cppi->txdma_work);
 		}
 	}
 }
