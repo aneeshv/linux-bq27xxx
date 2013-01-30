@@ -326,6 +326,8 @@ static struct snd_platform_data am335x_evm_snd_data1 = {
 	.version	= MCASP_VERSION_3,
 	.txnumevt	= 32,
 	.rxnumevt	= 32,
+	.get_context_loss_count	=
+			omap_pm_get_dev_context_loss_count,
 };
 
 static u8 am335x_evm_sk_iis_serializer_direction1[] = {
@@ -345,6 +347,8 @@ static struct snd_platform_data am335x_evm_sk_snd_data1 = {
 	.asp_chan_q	= EVENTQ_2,
 	.version	= MCASP_VERSION_3,
 	.txnumevt	= 32,
+	.get_context_loss_count	=
+			omap_pm_get_dev_context_loss_count,
 };
 
 static struct omap2_hsmmc_info am335x_mmc[] __initdata = {
