@@ -78,6 +78,7 @@ struct davinci_audio_dev {
 	unsigned int ahclkrctl;
 	unsigned int rxtdm;
 	unsigned int rfifoctl;
+	int context_loss_cnt;
 
 };
 

@@ -1062,6 +1062,11 @@ static int davinci_mcasp_suspend(struct platform_device *pdev,
 {
 	int ret = 0, idx;
 	struct davinci_audio_dev *dev = dev_get_drvdata(&pdev->dev);
+	struct snd_platform_data *pdata = pdev->dev.platform_data;
+
+	if (pdata->get_context_loss_count)
+		dev->context_loss_cnt =
+			pdata->get_context_loss_count(&pdev->dev);
 
 	if (dev->version == MCASP_VERSION_3) {
 		dev->gblctlx = mcasp_get_reg(dev->base +
@@ -1111,12 +1116,24 @@ static int davinci_mcasp_suspend(struct platform_device *pdev,
 
 static int davinci_mcasp_resume(struct platform_device *pdev)
 {
-	int ret = 0, idx;
+	int ret = 0, idx, loss_cnt;
 	struct davinci_audio_dev *dev = dev_get_drvdata(&pdev->dev);
+	struct snd_platform_data *pdata = pdev->dev.platform_data;
 
 	ret = pm_runtime_get_sync(&pdev->dev);
 	if (ret < 0)
 		dev_err(&pdev->dev, "failed to get runtime pm\n");
+
+	if (pdata->get_context_loss_count) {
+		loss_cnt = pdata->get_context_loss_count(&pdev->dev);
+		if (loss_cnt < 0) {
+			dev_err(&pdev->dev,
+				"%s failed, context loss count = %d\n",
+				__func__, loss_cnt);
+		} else if (dev->context_loss_cnt == loss_cnt) {
+			return 0;
+		}
+	}
 
 	if (dev->version == MCASP_VERSION_3) {
 		mcasp_set_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG,

@@ -115,6 +115,7 @@ struct snd_platform_data {
 	u8 version;
 	u8 txnumevt;
 	u8 rxnumevt;
+	int (*get_context_loss_count)(struct device *);
 };
 
 enum {
