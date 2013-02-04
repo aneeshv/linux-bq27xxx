@@ -988,18 +988,20 @@ void musb_babble_hwfix(struct musb *musb)
 
 			session_restart = 1;
 		} else {
+			u32 sofcnt;
 			pr_info("babble: controller shall resume normal\n");
 			/* check controller resumes normal operation
 			 * by checking sof occurs for few frames
 			 */
-			musb->sof_cnt = 2;
+			sofcnt = musb->sof_cnt;
 			ti81xx_musb_enable_sof(musb);
 			udelay(280);
-			if (musb->sof_cnt) {
+			if (musb->sof_cnt - sofcnt > 0)
+				pr_info("babble: controller resumed normal\n");
+			else {
 				pr_info("babble: controller cannot resume\n");
 				session_restart = 1;
-			} else
-				pr_info("babble: controller resumed normal\n");
+			}
 			ti81xx_musb_disable_sof(musb);
 		}
 	} else
@@ -1074,12 +1076,6 @@ static irqreturn_t ti81xx_interrupt(int irq, void *hci)
 
 	if (musb->int_usb & MUSB_INTR_SOF) {
 		musb->sof_cnt++;
-		if (musb->sof_enabled) {
-			if (musb->sof_cnt == 0)
-				ti81xx_musb_disable_sof(musb);
-			else
-				--musb->sof_cnt;
-		}
 		ret = IRQ_HANDLED;
 	}
 
