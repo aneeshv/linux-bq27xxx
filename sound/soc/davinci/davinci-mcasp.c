@@ -393,6 +393,7 @@ static void mcasp_start_tx(struct davinci_audio_dev *dev)
 		cnt++;
 
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_TXBUF_REG, 0);
+	msleep(50);
 }
 
 static void davinci_mcasp_start(struct davinci_audio_dev *dev, int stream)
@@ -400,6 +401,7 @@ static void davinci_mcasp_start(struct davinci_audio_dev *dev, int stream)
 	if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		if (dev->txnumevt) {	/* flush and enable FIFO */
 			if (dev->version == MCASP_VERSION_3) {
+				mcasp_stop_tx(dev);
 				mcasp_clr_bits(dev->base + MCASP_VER3_WFIFOCTL,
 								FIFO_ENABLE);
 				mcasp_set_bits(dev->base + MCASP_VER3_WFIFOCTL,
@@ -434,9 +436,6 @@ static void mcasp_stop_rx(struct davinci_audio_dev *dev)
 {
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_GBLCTLR_REG, 0);
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_RXSTAT_REG, 0xFFFFFFFF);
-
-	mcasp_stop_tx(dev);
-
 }
 
 static void mcasp_stop_tx(struct davinci_audio_dev *dev)
