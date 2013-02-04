@@ -609,27 +609,42 @@ void txfifoempty_intr_disable(struct musb *musb, u8 ep_num)
 
 #endif /* CONFIG_USB_TI_CPPI41_DMA */
 
-void ti81xx_musb_enable_sof(struct musb *musb)
+int ti81xx_musb_enable_sof(struct musb *musb)
 {
 	void __iomem *reg_base = musb->ctrl_base;
+
+	if (musb->sof_enabled) {
+		musb->sof_enabled++;
+		return musb->sof_enabled;
+	}
 
 	musb->sof_enabled = 1;
 	musb_writeb(musb->mregs, MUSB_INTRUSBE, MUSB_INTR_SOF |
 		musb_readb(musb->mregs, MUSB_INTRUSBE));
 	musb_writel(reg_base, USB_CORE_INTR_SET_REG, MUSB_INTR_SOF |
 		musb_readl(reg_base, USB_CORE_INTR_SET_REG));
+
+	return musb->sof_enabled;
 }
 
-void ti81xx_musb_disable_sof(struct musb *musb)
+int ti81xx_musb_disable_sof(struct musb *musb)
 {
 	void __iomem *reg_base = musb->ctrl_base;
 	u8 intrusb;
+
+	if (musb->sof_enabled)
+		musb->sof_enabled--;
+
+	if (musb->sof_enabled)
+		return musb->sof_enabled;
 
 	intrusb = musb_readb(musb->mregs, MUSB_INTRUSBE);
 	intrusb &= ~MUSB_INTR_SOF;
 	musb_writeb(musb->mregs, MUSB_INTRUSBE, intrusb);
 	musb_writel(reg_base, USB_CORE_INTR_CLEAR_REG, MUSB_INTR_SOF);
 	musb->sof_enabled = 0;
+
+	return 0;
 }
 
 /**
@@ -1058,6 +1073,7 @@ static irqreturn_t ti81xx_interrupt(int irq, void *hci)
 	dev_dbg(musb->controller, "usbintr (%x) epintr(%x)\n", usbintr, epintr);
 
 	if (musb->int_usb & MUSB_INTR_SOF) {
+		musb->sof_cnt++;
 		if (musb->sof_enabled) {
 			if (musb->sof_cnt == 0)
 				ti81xx_musb_disable_sof(musb);
@@ -1417,6 +1433,8 @@ static struct musb_platform_ops ti81xx_ops = {
 	.txfifoempty_intr_disable = txfifoempty_intr_disable,
 #endif
 	.reinit = musb_reinit,
+	.enable_sof = ti81xx_musb_enable_sof,
+	.disable_sof = ti81xx_musb_disable_sof
 };
 
 static void __devexit ti81xx_delete_musb_pdev(struct ti81xx_glue *glue, u8 id)
