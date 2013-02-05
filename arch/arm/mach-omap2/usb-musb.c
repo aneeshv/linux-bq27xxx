@@ -101,10 +101,18 @@ void __init usb_musb_init(struct omap_musb_board_data *musb_board_data)
 		name = "musb-ti81xx";
 		board_data->grndis_for_host_rx = 0;
 		board_data->babble_ctrl = 0;
+		board_data->tx_isoc_sched_enable = 1;
 
 		/* enable txfifo interrupt enable */
 		if (cpu_is_am33xx())
-			board_data->txfifo_intr_enable = 1;
+			board_data->txfifo_intr_enable = 0;
+
+		/*
+		 * disable txfifo_intr_enable if tx_isoc_sched logic
+		 * is enabled
+		 */
+		if (board_data->tx_isoc_sched_enable)
+			board_data->txfifo_intr_enable = 0;
 
 		if (cpu_is_am33xx() && omap_rev() >= AM335X_REV_ES2_0) {
 			board_data->grndis_for_host_rx = 1;

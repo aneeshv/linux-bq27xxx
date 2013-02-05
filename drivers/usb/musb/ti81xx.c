@@ -1076,6 +1076,11 @@ static irqreturn_t ti81xx_interrupt(int irq, void *hci)
 
 	if (musb->int_usb & MUSB_INTR_SOF) {
 		musb->sof_cnt++;
+		musb->int_usb &= ~MUSB_INTR_SOF;
+#ifdef CONFIG_USB_TI_CPPI41_DMA
+		if (musb->tx_isoc_sched_enable)
+			cppi41_isoc_schedular(musb);
+#endif
 		ret = IRQ_HANDLED;
 	}
 
@@ -1321,6 +1326,17 @@ int ti81xx_musb_init(struct musb *musb)
 	 * only for isochronous tranfers only
 	 */
 	musb->txfifo_intr_enable = data->txfifo_intr_enable;
+	musb->tx_isoc_sched_enable = data->tx_isoc_sched_enable;
+
+	if (musb->tx_isoc_sched_enable) {
+		if (musb->txfifo_intr_enable) {
+			musb->txfifo_intr_enable = 0;
+			dev_dbg(musb->controller, "disable txfifo intr"
+				" logic disabled\n");
+		}
+		dev_dbg(musb->controller, "tx-isoc-schedular logic enabled\n");
+	}
+
 	if (musb->txfifo_intr_enable)
 		printk(KERN_DEBUG "TxFifo Empty intr enabled\n");
 	else

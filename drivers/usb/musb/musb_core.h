@@ -483,6 +483,8 @@ struct musb {
 	u8			hw_babble_ctrl;
 	u32			sof_enabled;
 	u32			sof_cnt;
+	u8			tx_isoc_sched_enable;
+	u8			sof_isoc_started;
 };
 
 static inline struct musb *gadget_to_musb(struct usb_gadget *g)

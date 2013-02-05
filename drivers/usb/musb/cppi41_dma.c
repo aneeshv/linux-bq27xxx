@@ -35,6 +35,12 @@
 #define USB_CPPI41_CH_NUM_PD	128	/* 4K bulk data at full speed */
 #define USB_CPPI41_MAX_PD	(USB_CPPI41_CH_NUM_PD * (USB_CPPI41_NUM_CH+1))
 
+#define USBREQ_DMA_INIT			0
+#define USBREQ_DMA_START		1
+#define USBREQ_DMA_INPROGRESS		2
+#define USBREQ_DMA_COMPLETE		3
+#define USBREQ_DMA_SHORTPKT_COMPLETE	4
+
 #undef DEBUG_CPPI_TD
 #undef USBDRV_DEBUG
 
@@ -106,6 +112,7 @@ struct cppi41_channel {
 	u8  txfifo_intr_enable;
 	u8  count;
 	u8  txfifo_intr_first;
+	u8  xfer_state;
 	struct usb_pkt_desc *curr_pd;
 };
 
@@ -139,6 +146,7 @@ struct cppi41 {
 	u32 teardown_reg_offs;		/* USB_TEARDOWN_REG offset */
 	u32 bd_size;
 	u8  txfifo_intr_enable;		/* txfifo empty interrupt logic */
+	u8  tx_isoc_sched_enable;
 };
 
 struct usb_cppi41_info usb_cppi41_info[2];
@@ -162,6 +170,20 @@ static void print_pd_list(struct usb_pkt_desc *pd_pool_head)
 	dprintk("\n");
 }
 #endif
+
+static void musb_enable_tx_dma(struct musb_hw_ep *hw_ep)
+{
+	void __iomem *epio = hw_ep->regs;
+	u16 csr;
+
+	csr = musb_readw(epio, MUSB_TXCSR);
+	csr |= MUSB_TXCSR_DMAENAB | MUSB_TXCSR_DMAMODE;
+	if (is_host_enabled(hw_ep->musb))
+		csr |= MUSB_TXCSR_H_WZC_BITS;
+	else
+		csr |= MUSB_TXCSR_MODE | MUSB_TXCSR_P_WZC_BITS;
+	musb_writew(epio, MUSB_TXCSR, csr);
+}
 
 static struct usb_pkt_desc *usb_get_free_pd(struct cppi41 *cppi)
 {
@@ -621,11 +643,12 @@ static unsigned cppi41_next_tx_segment(struct cppi41_channel *tx_ch)
 	 * in TxFifoEmpty interrupt logic when multiple tx endpoints active
 	 * in parallel
 	 */
-	if (hw_ep->xfer_type == USB_ENDPOINT_XFER_ISOC
-		&& cppi->txfifo_intr_enable
-		&& length <= tx_ch->pkt_size) {
+	if (hw_ep->xfer_type == USB_ENDPOINT_XFER_ISOC) {
+		tx_ch->xfer_state = USBREQ_DMA_INIT;
+		if (cppi->txfifo_intr_enable) {
 			tx_ch->txfifo_intr_enable = 1;
 			tx_ch->txfifo_intr_first = 0;
+		}
 	}
 
 	for (n = 0; n < num_pds; n++) {
@@ -682,6 +705,16 @@ static unsigned cppi41_next_tx_segment(struct cppi41_channel *tx_ch)
 
 		cppi41_queue_push(&tx_ch->queue_obj, curr_pd->dma_addr,
 				  USB_CPPI41_DESC_ALIGN, pkt_size);
+
+		if (cppi->tx_isoc_sched_enable &&
+			hw_ep->xfer_type == USB_ENDPOINT_XFER_ISOC) {
+			tx_ch->xfer_state = USBREQ_DMA_START;
+			musb_enable_sof(cppi->musb);
+			if (cppi->musb->sof_isoc_started) {
+				tx_ch->xfer_state = USBREQ_DMA_INPROGRESS;
+				musb_enable_tx_dma(tx_ch->end_pt);
+			}
+		}
 	}
 
 	return n;
@@ -1228,11 +1261,19 @@ static int cppi41_channel_abort(struct dma_channel *channel)
 	unsigned long pd_addr;
 	u32 csr, td_reg;
 	u8 ch_num, ep_num, i;
+	unsigned long flags;
 
 	cppi_ch = container_of(channel, struct cppi41_channel, channel);
 	ch_num = cppi_ch->ch_num;
 	cppi = cppi_ch->channel.private_data;
 	musb = cppi->musb;
+	if (cppi->tx_isoc_sched_enable &&
+		cppi_ch->end_pt->xfer_type == USB_ENDPOINT_XFER_ISOC) {
+		spin_lock_irqsave(&musb->lock, flags);
+		cppi_ch->xfer_state = USBREQ_DMA_INIT;
+		musb_disable_sof(musb);
+		spin_unlock_irqrestore(&musb->lock, flags);
+	}
 
 	switch (channel->status) {
 	case MUSB_DMA_STATUS_BUS_ABORT:
@@ -1453,6 +1494,64 @@ void txdma_completion_work(struct work_struct *data)
 
 }
 
+void cppi41_isoc_schedular(struct musb *musb)
+{
+	struct cppi41 *cppi;
+	struct cppi41_channel *tx_ch;
+	int index;
+
+	cppi = container_of(musb->dma_controller, struct cppi41, controller);
+	for (index = 0; (index < USB_CPPI41_NUM_CH); index++) {
+		void __iomem *epio;
+		u16 csr;
+
+		tx_ch = &cppi->tx_cppi_ch[index];
+
+		if (tx_ch->xfer_state == USBREQ_DMA_INIT ||
+			tx_ch->xfer_state == USBREQ_DMA_INPROGRESS)
+			continue;
+
+		epio = tx_ch->end_pt->regs;
+		csr = musb_readw(epio, MUSB_TXCSR);
+
+		switch (tx_ch->xfer_state) {
+
+		case USBREQ_DMA_SHORTPKT_COMPLETE:
+			if (cppi->musb->sof_isoc_started) {
+				dev_dbg(musb->controller, "Invalid state"
+				"shortpkt complete happen ep%d\n", index+1);
+				break;
+			}
+
+		case USBREQ_DMA_START:
+			if (tx_ch->xfer_state == USBREQ_DMA_SHORTPKT_COMPLETE)
+				tx_ch->xfer_state = USBREQ_DMA_COMPLETE;
+			else
+				tx_ch->xfer_state = USBREQ_DMA_INPROGRESS;
+
+			cppi->musb->sof_isoc_started = 1;
+			musb_enable_tx_dma(tx_ch->end_pt);
+			dev_dbg(musb->controller, "isoc_sched: DMA_INP ep%d\n",
+					index+1);
+			break;
+
+		case USBREQ_DMA_COMPLETE:
+			tx_ch->channel.status = MUSB_DMA_STATUS_FREE;
+			tx_ch->xfer_state = USBREQ_DMA_INIT;
+			dev_dbg(musb->controller, "isoc_sched: gvbk DMA_FREE"
+				" ep%d\n", index+1);
+			musb_dma_completion(cppi->musb, index+1, 1);
+			musb_disable_sof(cppi->musb);
+			break;
+
+		default:
+			dev_dbg(musb->controller, "isoc_sched: invalid state%d"
+				" ep%d\n", tx_ch->xfer_state, index+1);
+		}
+	}
+}
+EXPORT_SYMBOL(cppi41_isoc_schedular);
+
 void cppi41_handle_txfifo_intr(struct musb *musb, u16 usbintr)
 {
 	struct cppi41 *cppi;
@@ -1518,6 +1617,7 @@ cppi41_dma_controller_create(struct musb  *musb, void __iomem *mregs)
 	cppi->cppi_info = (struct usb_cppi41_info *)&usb_cppi41_info[musb->id];;
 	cppi->en_bd_intr = cppi->cppi_info->bd_intr_ctrl;
 	cppi->txfifo_intr_enable = musb->txfifo_intr_enable;
+	cppi->tx_isoc_sched_enable = musb->tx_isoc_sched_enable;
 	INIT_WORK(&cppi->txdma_work, txdma_completion_work);
 	INIT_WORK(&cppi->rxdma_work, rxdma_completion_work);
 
@@ -1615,7 +1715,16 @@ static void usb_process_tx_queue(struct cppi41 *cppi, unsigned index)
 		 */
 		usb_put_free_pd(cppi, curr_pd);
 
-		if ((tx_ch->curr_offset < tx_ch->length) ||
+		if (cppi->tx_isoc_sched_enable &&
+			tx_ch->end_pt->xfer_type == USB_ENDPOINT_XFER_ISOC) {
+			if (tx_ch->xfer_state == USBREQ_DMA_INPROGRESS)
+				tx_ch->xfer_state = USBREQ_DMA_COMPLETE;
+			else
+				tx_ch->xfer_state =
+					USBREQ_DMA_SHORTPKT_COMPLETE;
+			dev_dbg(musb->controller, "DMAIsr isoch: state %d ep%d len %d\n",
+					tx_ch->xfer_state, ep_num, length);
+		} else if ((tx_ch->curr_offset < tx_ch->length) ||
 		    (tx_ch->transfer_mode && !tx_ch->zlp_queued)) {
 			sched_work = 1;
 		} else if (tx_ch->channel.actual_len >= tx_ch->length) {

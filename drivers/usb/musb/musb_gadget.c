@@ -410,9 +410,18 @@ static void txstate(struct musb *musb, struct musb_request *req)
 			if (request_size == 0)
 				csr &= ~(MUSB_TXCSR_DMAENAB |
 					MUSB_TXCSR_DMAMODE);
-			else
-				csr |= MUSB_TXCSR_DMAENAB | MUSB_TXCSR_DMAMODE |
-				       MUSB_TXCSR_MODE;
+			else {
+				csr &= ~(MUSB_TXCSR_DMAENAB |
+					MUSB_TXCSR_DMAMODE);
+				if (!musb->tx_isoc_sched_enable ||
+					musb_ep->type !=
+					USB_ENDPOINT_XFER_ISOC) {
+					csr |= MUSB_TXCSR_DMAENAB |
+						MUSB_TXCSR_DMAMODE |
+						MUSB_TXCSR_MODE;
+				}
+			}
+
 			musb_writew(epio, MUSB_TXCSR,
 				(MUSB_TXCSR_P_WZC_BITS & ~MUSB_TXCSR_P_UNDERRUN)
 					| csr);
