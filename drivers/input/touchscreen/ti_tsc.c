@@ -154,7 +154,15 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 
 	status = tscadc_readl(ts_dev, TSCADC_REG_IRQSTATUS);
 
-	if (status & TSCADC_IRQENB_FIFO0THRES) {
+	/*
+	 * ADC and touchscreen share the IRQ line.
+	 * FIFO1 threshold interrupt is used by ADC,
+	 * hence return from touchscreen IRQ handler if FIFO1
+	 * threshold interrupt occurred.
+	 */
+	if (status & TSCADC_IRQENB_FIFO1THRES)
+		return IRQ_NONE;
+	else if (status & TSCADC_IRQENB_FIFO0THRES) {
 		fifo0count = tscadc_readl(ts_dev, TSCADC_REG_FIFO0CNT);
 		fifo1count = tscadc_readl(ts_dev, TSCADC_REG_FIFO1CNT);
 		for (i = 0; i < (fifo0count-1); i++) {
@@ -279,7 +287,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 	}
 	irqclr |= TSCADC_IRQENB_HW_PEN;
 
-	tscadc_writel(ts_dev, TSCADC_REG_IRQSTATUS, irqclr);
+	tscadc_writel(ts_dev, TSCADC_REG_IRQSTATUS, (status | irqclr));
 
 	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB_TC);
 	return IRQ_HANDLED;
@@ -323,7 +331,7 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	ts_dev->input = input_dev;
 
 	ts_dev->irq = tscadc_dev->irq;
-	err = request_irq(ts_dev->irq, tscadc_interrupt, IRQF_DISABLED,
+	err = request_irq(ts_dev->irq, tscadc_interrupt, IRQF_SHARED,
 				pdev->dev.driver->name, ts_dev);
 	if (err) {
 		dev_err(&pdev->dev, "failed to allocate irq.\n");
