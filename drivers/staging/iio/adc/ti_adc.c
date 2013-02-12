@@ -21,14 +21,25 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
+#include <linux/sched.h>
+
 #include "../iio.h"
+#include "../sysfs.h"
+#include "../buffer_generic.h"
+#include "../ring_sw.h"
+
 #include <linux/mfd/ti_tscadc.h>
 #include <linux/platform_data/ti_adc.h>
 
 struct adc_device {
 	struct ti_tscadc_dev	*mfd_tscadc;
-	struct iio_dev	*idev;
-	int channels;
+	struct iio_dev		*idev;
+	struct work_struct	poll_work;
+	wait_queue_head_t	wq_data_avail;
+	int			channels;
+	int			irq;
+	bool			is_continuous_mode;
+	u16			*buffer;
 };
 
 static unsigned int adc_readl(struct adc_device *adc, unsigned int reg)
@@ -71,6 +82,208 @@ static void adc_step_config(struct adc_device *adc_dev)
 	}
 }
 
+static ssize_t tiadc_show_mode(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+	struct adc_device *adc_dev = iio_priv(indio_dev);
+	unsigned int tmp;
+
+	tmp = adc_readl(adc_dev, TSCADC_REG_STEPCONFIG(TOTAL_STEPS));
+	tmp &= TSCADC_STEPCONFIG_MODE(1);
+
+	if (tmp == 0x00)
+		return sprintf(buf, "oneshot\n");
+	else if (tmp == 0x01)
+		return sprintf(buf, "continuous\n");
+	else
+		return sprintf(buf, "Operation mode unknown\n");
+}
+
+static ssize_t tiadc_set_mode(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+	struct adc_device *adc_dev = iio_priv(indio_dev);
+	int i, channels = 0, steps;
+	unsigned int stepconfig, config;
+
+	steps = (TOTAL_STEPS - adc_dev->channels) + 1;
+	channels = TOTAL_CHANNELS - adc_dev->channels;
+
+	config = adc_readl(adc_dev, TSCADC_REG_CTRL);
+	config &= ~(TSCADC_CNTRLREG_TSCSSENB);
+	adc_writel(adc_dev, TSCADC_REG_CTRL, config);
+
+	stepconfig = adc_readl(adc_dev, TSCADC_REG_STEPCONFIG(steps));
+
+	for (i = steps; i <= TOTAL_STEPS; i++) {
+		if (!strncmp(buf, "oneshot", 7)) {
+			stepconfig &= ~(TSCADC_STEPCONFIG_MODE_SWCNT);
+			adc_writel(adc_dev, TSCADC_REG_STEPCONFIG(i),
+						stepconfig);
+			adc_dev->is_continuous_mode = false;
+		} else if (!strncmp(buf, "continuous", 10)) {
+			adc_writel(adc_dev, TSCADC_REG_STEPCONFIG(i),
+				stepconfig | TSCADC_STEPCONFIG_MODE_SWCNT);
+			adc_dev->is_continuous_mode = true;
+		}
+	}
+
+	config = adc_readl(adc_dev, TSCADC_REG_CTRL);
+	adc_writel(adc_dev, TSCADC_REG_CTRL,
+			(config | TSCADC_CNTRLREG_TSCSSENB));
+	return count;
+}
+
+static IIO_DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, tiadc_show_mode,
+		tiadc_set_mode, 0);
+
+static struct attribute *tiadc_attributes[] = {
+	&iio_dev_attr_mode.dev_attr.attr,
+	NULL,
+};
+
+static const struct attribute_group tiadc_attribute_group = {
+	.attrs = tiadc_attributes,
+};
+
+static irqreturn_t tiadc_irq(int irq, void *private)
+{
+	struct iio_dev *idev = private;
+	struct adc_device *adc_dev = iio_priv(idev);
+	unsigned int status, fifo1count;
+
+	status = adc_readl(adc_dev, TSCADC_REG_IRQSTATUS);
+	if (status & TSCADC_IRQENB_FIFO1THRES) {
+		fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
+		adc_writel(adc_dev, TSCADC_REG_IRQCLR,
+				TSCADC_IRQENB_FIFO1THRES);
+
+		if (iio_buffer_enabled(idev)) {
+			if (!work_pending(&adc_dev->poll_work))
+				schedule_work(&adc_dev->poll_work);
+		} else {
+			wake_up_interruptible(&adc_dev->wq_data_avail);
+		}
+		adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
+				(status | TSCADC_IRQENB_FIFO1THRES));
+		return IRQ_HANDLED;
+	} else {
+		return IRQ_NONE;
+	}
+}
+
+static void tiadc_poll_handler(struct work_struct *work_s)
+{
+	struct adc_device *adc_dev =
+		container_of(work_s, struct adc_device, poll_work);
+	struct iio_dev *idev = iio_priv_to_dev(adc_dev);
+	struct iio_buffer *buffer = idev->buffer;
+	unsigned int fifo1count, readx1, status;
+	int i;
+	u32 *iBuf;
+
+	fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
+	iBuf = kmalloc((fifo1count + 1) * sizeof(u32), GFP_KERNEL);
+	if (iBuf == NULL)
+		return;
+
+	for (i = 0; i < fifo1count; i++) {
+		readx1 = adc_readl(adc_dev, TSCADC_REG_FIFO1);
+		readx1 &= TSCADC_FIFOREAD_DATA_MASK;
+		iBuf[i] = readx1;
+	}
+
+	buffer->access->store_to(buffer, (u8 *) iBuf, iio_get_time_ns());
+	status = adc_readl(adc_dev, TSCADC_REG_IRQENABLE);
+	adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
+			(status | TSCADC_IRQENB_FIFO1THRES));
+
+	kfree(iBuf);
+}
+
+static int tiadc_buffer_preenable(struct iio_dev *idev)
+{
+	struct iio_buffer *buffer = idev->buffer;
+
+	buffer->access->set_bytes_per_datum(buffer, 16);
+	return 0;
+}
+
+static int tiadc_buffer_postenable(struct iio_dev *idev)
+{
+	struct adc_device *adc_dev = iio_priv(idev);
+	struct iio_buffer *buffer = idev->buffer;
+	unsigned int enb, status, fifo1count;
+	int stepnum, i;
+	u8 bit;
+
+	if (!adc_dev->is_continuous_mode) {
+		pr_info("Data cannot be read continuously in one shot mode\n");
+		return -EINVAL;
+	} else {
+		status = adc_readl(adc_dev, TSCADC_REG_IRQENABLE);
+		adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
+				(status | TSCADC_IRQENB_FIFO1THRES));
+
+		fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
+		for (i = 0; i < fifo1count; i++)
+			adc_readl(adc_dev, TSCADC_REG_FIFO1);
+
+		adc_writel(adc_dev, TSCADC_REG_SE, 0x00);
+		for_each_set_bit(bit, buffer->scan_mask,
+				adc_dev->channels) {
+			struct iio_chan_spec const *chan = idev->channels + bit;
+			/*
+			 * There are a total of 16 steps available
+			 * that are shared between ADC and touchscreen.
+			 * We start configuring from step 16 to 0 incase of
+			 * ADC. Hence the relation between input channel
+			 * and step for ADC would be as below.
+			 */
+			stepnum = chan->channel + 9;
+			enb = adc_readl(adc_dev, TSCADC_REG_SE);
+			enb |= stepnum;
+			adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_ENB(enb));
+		}
+		return 0;
+	}
+}
+
+static int tiadc_buffer_postdisable(struct iio_dev *idev)
+{
+	struct adc_device *adc_dev = iio_priv(idev);
+
+	adc_writel(adc_dev, TSCADC_REG_IRQCLR, TSCADC_IRQENB_FIFO1THRES);
+	adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB_TC);
+	return 0;
+}
+
+static const struct iio_buffer_setup_ops tiadc_swring_setup_ops = {
+	.preenable = &tiadc_buffer_preenable,
+	.postenable = &tiadc_buffer_postenable,
+	.postdisable = &tiadc_buffer_postdisable,
+};
+
+static int tiadc_config_sw_ring(struct iio_dev *idev)
+{
+	struct adc_device *adc_dev = iio_priv(idev);
+	int ret;
+
+	idev->buffer = iio_sw_rb_allocate(idev);
+	if (!idev->buffer)
+		ret = -ENOMEM;
+
+	idev->buffer->access = &ring_sw_access_funcs;
+	idev->buffer->setup_ops = &tiadc_swring_setup_ops;
+
+	INIT_WORK(&adc_dev->poll_work, &tiadc_poll_handler);
+
+	idev->modes |= INDIO_BUFFER_HARDWARE;
+	return 0;
+}
+
 static int tiadc_channel_init(struct iio_dev *idev, struct adc_device *adc_dev)
 {
 	struct iio_chan_spec *chan_array;
@@ -89,6 +302,7 @@ static int tiadc_channel_init(struct iio_dev *idev, struct adc_device *adc_dev)
 		chan->type = IIO_VOLTAGE;
 		chan->indexed = 1;
 		chan->channel = channels;
+		chan->scan_index = i;
 		chan->scan_type.sign = 'u';
 		chan->scan_type.realbits = 12;
 		chan->scan_type.storagebits = 32;
@@ -115,31 +329,38 @@ static int tiadc_read_raw(struct iio_dev *idev,
 	unsigned long timeout = jiffies + usecs_to_jiffies
 			(IDLE_TIMEOUT * adc_dev->channels);
 
-	adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
+	if (adc_dev->is_continuous_mode) {
+		pr_info("One shot mode not enabled\n");
+		return -EINVAL;
+	} else {
+		adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
 
-	/* Wait for ADC sequencer to complete sampling */
-	while (adc_readl(adc_dev, TSCADC_REG_ADCFSM) & TSCADC_SEQ_STATUS) {
-		if (time_after(jiffies, timeout))
-			return -EAGAIN;
-	}
-
-	map_val = chan->channel + TOTAL_CHANNELS;
-	fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
-	for (i = 0; i < fifo1count; i++) {
-		readx1 = adc_readl(adc_dev, TSCADC_REG_FIFO1);
-		stepid = readx1 & TSCADC_FIFOREAD_CHNLID_MASK;
-		stepid = stepid >> 0x10;
-
-		if (stepid == map_val) {
-			readx1 = readx1 & TSCADC_FIFOREAD_DATA_MASK;
-			*val = readx1;
+		/* Wait for ADC sequencer to complete sampling */
+		while (adc_readl(adc_dev, TSCADC_REG_ADCFSM) &
+				TSCADC_SEQ_STATUS) {
+			if (time_after(jiffies, timeout))
+				return -EAGAIN;
 		}
+
+		map_val = chan->channel + TOTAL_CHANNELS;
+		fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
+		for (i = 0; i < fifo1count; i++) {
+			readx1 = adc_readl(adc_dev, TSCADC_REG_FIFO1);
+			stepid = readx1 & TSCADC_FIFOREAD_CHNLID_MASK;
+			stepid = stepid >> 0x10;
+
+			if (stepid == map_val) {
+				readx1 = readx1 & TSCADC_FIFOREAD_DATA_MASK;
+				*val = readx1;
+			}
+		}
+		return IIO_VAL_INT;
 	}
-	return IIO_VAL_INT;
 }
 
 static const struct iio_info tiadc_info = {
 	.read_raw = &tiadc_read_raw,
+	.attrs = &tiadc_attribute_group,
 };
 
 static int __devinit tiadc_probe(struct platform_device *pdev)
@@ -168,6 +389,7 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 	adc_dev->mfd_tscadc = tscadc_dev;
 	adc_dev->idev = idev;
 	adc_dev->channels = pdata->adc_init->adc_channels;
+	adc_dev->irq = tscadc_dev->irq;
 
 	idev->dev.parent = &pdev->dev;
 	idev->name = dev_name(&pdev->dev);
@@ -176,9 +398,28 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 
 	adc_step_config(adc_dev);
 
+	/* program FIFO threshold to value minus 1 */
+	adc_writel(adc_dev, TSCADC_REG_FIFO1THR, FIFO1_THRESHOLD);
+
 	err = tiadc_channel_init(idev, adc_dev);
 	if (err < 0)
 		goto err_cleanup_channels;
+
+	init_waitqueue_head(&adc_dev->wq_data_avail);
+
+	err = request_irq(adc_dev->irq, tiadc_irq, IRQF_SHARED,
+		idev->name, idev);
+	if (err)
+		goto err_unregister;
+
+	err = tiadc_config_sw_ring(idev);
+	if (err)
+		goto err_unregister;
+
+	err = iio_buffer_register(idev,
+			idev->channels, idev->num_channels);
+	if (err < 0)
+		goto err_unregister;
 
 	err = iio_device_register(idev);
 	if (err)
