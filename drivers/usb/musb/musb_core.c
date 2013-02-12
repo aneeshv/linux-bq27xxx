@@ -2455,11 +2455,12 @@ static int musb_suspend(struct device *dev)
 
 	spin_lock_irqsave(&musb->lock, flags);
 
-	if (is_peripheral_active(musb)) {
+	if (is_peripheral_active(musb) && musb->is_active) {
 		/*
 		 * Don't allow system suspend while peripheral mode
 		 * is actve and cable is connected to host.
 		 */
+		return -EBUSY;
 	} else if (is_host_active(musb)) {
 		/* we know all the children are suspended; sometimes
 		 * they will even be wakeup-enabled.
