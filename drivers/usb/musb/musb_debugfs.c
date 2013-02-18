@@ -223,6 +223,9 @@ static ssize_t musb_test_mode_write(struct file *file,
 		test = MUSB_TEST_SE0_NAK;
 
 	musb_writeb(musb->mregs, MUSB_TESTMODE, test);
+	if (test == MUSB_TEST_PACKET)
+		musb_writew(musb->endpoints[0].regs,
+			MUSB_CSR0, MUSB_CSR0_TXPKTRDY);
 	pr_info("%smusb%d: test-mode value %x\n", buf, musb->id, test);
 
 	return count;
