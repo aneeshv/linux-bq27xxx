@@ -133,6 +133,13 @@ static int am33xx_pm_suspend(void)
 	if (suspend_cfg_param_list[EVM_ID] != EVM_SK)
 		omap_hwmod_idle(gpio1_oh);
 
+	/*
+	 * Keep Touchscreen module enabled during standby
+	 * to enable wakeup from standby.
+	 */
+	if (suspend_state == PM_SUSPEND_STANDBY)
+		writel(0x2, AM33XX_CM_WKUP_ADC_TSC_CLKCTRL);
+
 	if (gfx_l3_clkdm && gfx_l4ls_clkdm) {
 		clkdm_sleep(gfx_l3_clkdm);
 		clkdm_sleep(gfx_l4ls_clkdm);
@@ -165,6 +172,13 @@ static int am33xx_pm_suspend(void)
 		clkdm_wakeup(gfx_l3_clkdm);
 		clkdm_wakeup(gfx_l4ls_clkdm);
 	}
+
+	/*
+	 * Touchscreen module was enabled during standby
+	 * Disable it here.
+	 */
+	if (suspend_state == PM_SUSPEND_STANDBY)
+		writel(0x2, AM33XX_CM_WKUP_ADC_TSC_CLKCTRL);
 
 	/*
 	 * Put USB module to idle on resume from standby
