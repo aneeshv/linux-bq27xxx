@@ -31,6 +31,7 @@ enum suspend_cfg_params {
 	SUSP_VTP_CTRL_VAL,
 	EVM_ID,
 	CPU_REV,
+	SUSPEND_STATE,
 	SUSPEND_CFG_PARAMS_END /* Must be the last entry */
 };
 
@@ -80,5 +81,8 @@ struct a8_wkup_m3_ipc_data {
 #define CPU_REV_2		2
 
 #define M3_VERSION_UNKNOWN		0x0000ffff
+
+#define PM_DS0			0
+#define PM_STANDBY		1
 
 #endif

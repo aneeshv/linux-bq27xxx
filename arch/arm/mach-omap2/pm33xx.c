@@ -130,8 +130,21 @@ static int am33xx_pm_suspend(void)
 	 * might have issues. Refer to commit 672639b for the
 	 * details
 	 */
-	if (suspend_cfg_param_list[EVM_ID] != EVM_SK)
+	/*
+	 * Keep GPIO0 module enabled during standby to
+	 * support wakeup via GPIO0 keys.
+	 */
+	if ((suspend_cfg_param_list[EVM_ID] != EVM_SK) &&
+			(suspend_state != PM_SUSPEND_STANDBY))
 		omap_hwmod_idle(gpio1_oh);
+	/*
+	 * Update Suspend_State value to be used in sleep33xx.S to keep
+	 * GPIO0 module enabled during standby for EVM-SK
+	 */
+	if (suspend_state == PM_SUSPEND_STANDBY)
+		suspend_cfg_param_list[SUSPEND_STATE] = PM_STANDBY;
+	else
+		suspend_cfg_param_list[SUSPEND_STATE] = PM_DS0;
 
 	/*
 	 * Keep Touchscreen module enabled during standby
@@ -192,7 +205,12 @@ static int am33xx_pm_suspend(void)
 	 * Enable the GPIO module. Once the driver is
 	 * fully adapted to runtime PM this will go away
 	 */
-	if (suspend_cfg_param_list[EVM_ID] != EVM_SK)
+	/*
+	 * During standby, GPIO was not disabled. Hence no
+	 * need to enable it here.
+	 */
+	if ((suspend_cfg_param_list[EVM_ID] != EVM_SK) &&
+			(suspend_state != PM_SUSPEND_STANDBY))
 		omap_hwmod_enable(gpio1_oh);
 
 	return ret;

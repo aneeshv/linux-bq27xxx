@@ -42,6 +42,7 @@
  * 2) susp_vtp_ctrl_val [r1]
  * 3) evm_id [r2]
  * 4) cpu_rev [r3]
+ * 5) suspend_state[r4]
  *
  * The code loads these values taking r0 value as reference to the array in
  * registers starting from r0, i,e memory_type goes to r0 and susp_vtp_ctrl_val
@@ -139,13 +140,14 @@ wait_sc_\num:
 	mov	r0, #0
 	mcr	p15, 0, r0, c7, c5, 0	@ I+BTB cache invalidate
 
-	ldm	r8, {r0-r3}		@ gather values passed
+	ldm	r8, {r0-r4}		@ gather values passed
 
 	/* Save the values passed */
 	str	r0, mem_type
 	str	r1, susp_vtp_ctrl_val
 	str	r2, evm_id
 	str	r3, cpu_rev
+	str	r4, suspend_state
 
 	ldr	r0, emif_addr_virt
 
@@ -244,6 +246,16 @@ wait_sc_\num:
 	ldr	r1, [r0, #OMAP4_GPIO_CLEARDATAOUT]
 	mov	r2, #(1 << 7)
 	str	r2, [r0, #OMAP4_GPIO_CLEARDATAOUT]
+
+	/*
+	 * Keep GPIO0 enabled during standby to support
+	 * wakeup from Standby via GPIO0 keys.
+	 *
+	 * GPIO0 is disabled here for EVM_SK only in DS0.
+	 */
+	ldr 	r6, suspend_state
+	cmp	r6, #PM_STANDBY
+	beq	no_gpio_toggle
 
 	/* Disable GPIO0 for EVM_SK here */
 	ldr	r1, virt_gpio0_clkctrl
@@ -462,6 +474,14 @@ poll_vtp_ready_abt3:
 	cmp	r6, #EVM_SK
 	bne	no_gpio_toggle2
 
+	/*
+	 * GPIO0 was not disabled during standby for EVM_SK
+	 * Hence no need to enable it back here.
+	 */
+	ldr	r6, suspend_state
+	cmp	r6, #PM_STANDBY
+	beq	skip_gpio_enable1
+
 	/* Enable GPIO0 for EVM-SK here */
 	ldr	r1, virt_gpio0_clkctrl
 	mov	r2, #0x2
@@ -471,6 +491,7 @@ wait_gpio0_enable:
 	cmp	r2, r3
 	bne	wait_gpio0_enable
 
+skip_gpio_enable1:
 	/* Drive GPIO0_7 HIGH */
 	ldr	r0, gpio0_addr_virt
 	ldr	r1, [r0, #OMAP4_GPIO_SETDATAOUT]
@@ -669,6 +690,14 @@ poll_vtp_ready3:
 	cmp	r6, #EVM_SK
 	bne	no_gpio_toggle3
 
+	/*
+	 * GPIO0 was not disabled during standby for EVM_SK
+	 * Hence no need to enable it back here.
+	 */
+	ldr 	r6, suspend_state
+	cmp	r6, #PM_STANDBY
+	beq	skip_gpio_enable2
+
 	/* Enable GPIO0 for EVM-SK here */
 	ldr	r1, phys_gpio0_clkctrl
 	mov	r2, #0x2
@@ -678,6 +707,7 @@ wait_gpio0_phys_enable:
 	cmp	r2, r3
 	bne	wait_gpio0_phys_enable
 
+skip_gpio_enable2:
 	/* Drive GPIO0_7 HIGH */
 	ldr	r0, gpio0_phys_addr
 	ldr	r1, [r0, #OMAP4_GPIO_SETDATAOUT]
@@ -958,6 +988,8 @@ mem_type:
 evm_id:
 	.word	0xDEADBEEF
 cpu_rev:
+	.word	0xDEADBEEF
+suspend_state:
 	.word	0xDEADBEEF
 emif_addr_virt:
 	.word	0xDEADBEEF
