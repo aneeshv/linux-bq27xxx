@@ -20,8 +20,11 @@
 #include <linux/slab.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
-#include <linux/io.h>
+#include <linux/gpio.h>
+#include <linux/interrupt.h>
+#include <linux/suspend.h>
 
+#include "cm33xx.h"
 #include "control.h"
 #include "mux.h"
 
@@ -473,6 +476,17 @@ struct susp_io_pad_conf {
 static u32 susp_io_pad_conf_enabled;
 static struct susp_io_pad_conf pad_array[MAX_IO_PADCONF];
 
+struct standby_gpio_pad_struct {
+	u32 enabled;
+	u32 gpio_request_success;
+	u32 pin_val;
+	u32 trigger;
+	u32 gpio_pin;
+	u32 curr_pin_mux;
+};
+
+static struct standby_gpio_pad_struct standby_gpio_array[MAX_IO_PADCONF];
+
 /*
  * Expected input: 1/0
  * Example: "echo 1 > enable_suspend_io_pad_conf" enables IO PAD Config
@@ -653,6 +667,210 @@ static const struct file_operations susp_io_pad_fops = {
 	.release	= single_release,
 };
 
+static int standby_gpio_status_show(struct seq_file *s, void *unused)
+{
+	struct omap_mux *mux_arr = &am33xx_muxmodes[0];
+
+	int i;
+
+	for (i = 0; i < MAX_IO_PADCONF;) {
+		int off, j, addr_match = 0;
+		char *trigger;
+
+		if (standby_gpio_array[i].enabled) {
+			switch (standby_gpio_array[i].trigger) {
+			case IRQF_TRIGGER_RISING:
+				trigger = "rising";
+				break;
+
+			case IRQF_TRIGGER_FALLING:
+				trigger = "falling";
+				break;
+
+			case IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING:
+			/* fall through */
+			default:
+				trigger = "falling_rising";
+				break;
+			}
+
+			seq_printf(s, "%s.%s (0x%08x = 0x%02x), trigger = %s\n",
+				mux_arr->muxnames[0],
+				mux_arr->muxnames[OMAP_MUX_MODE7],
+				(unsigned int)(AM33XX_CONTROL_PADCONF_MUX_PBASE
+				+ mux_arr->reg_offset),
+				standby_gpio_array[i].pin_val,
+				trigger);
+
+
+		}
+
+		/*
+		 * AM335x pin-mux register offset sequence is broken, meaning
+		 * there is no pin-mux setting at some offset and at some
+		 * offsets, the modes are not supposed to be changed. Because
+		 * of this, the "am33xx_muxmodes" array above will not have any
+		 * values at these indexes. Hence the standby_gpio_array &
+		 * am33xx_muxmodes array will be out of sync at these index.
+		 * Handle missing pin-mux entries accordingly by using a special
+		 * array that indicate these offsets.
+		 */
+
+		i++;
+		off = ((i * 4) + 0x800);
+		for (j = 0; j < ARRAY_SIZE(am335x_pin_mux_addr_to_skip); j++) {
+			if (off == am335x_pin_mux_addr_to_skip[j]) {
+				addr_match = 1;
+				break;
+			}
+		}
+		if (addr_match == 0)
+			mux_arr++;
+	}
+
+	return 0;
+}
+
+/*
+ * Expected input: pinmux_name=<value1>,<trigger>
+ *	pinmux_name = Pin-mux name that is to be setup as gpio during standby
+ *		suspend with gpio interrupt trigger mode as per <trigger> field
+ *		with value <value1>.
+ *		Pin-mux name should be in "mode0_name.mode7_function_name"
+ *		format. Internally the pin-mux offset is calculated from the
+ *		pin-mux names. Invalid pin-mux names and values are ignored.
+ *		Remember,
+ *			- No spaces anywhere in the input.
+ *			- <value1> field is a must
+ *			- <trigger> field is a must and must be one of "rising",
+ *			  "falling"
+ *
+ * Example:
+ *	  echo uart0_rxd.gpio1_10=0x27,rising > standby_gpio_pad_conf
+ *		sets up uart0_rxd.gpio1_10 for gpio mode with interrupt trigger
+ *		as rising and pin-mux value as 0x27 when entering standby mode.
+ */
+static ssize_t standby_gpio_pad_write(struct file *file,
+					 const char __user *user_buf,
+					 size_t count, loff_t *ppos)
+{
+	u32 trigger;
+	char *export_string, *token, *name;
+
+	export_string = kzalloc(count + 1, GFP_KERNEL);
+	if (!export_string)
+		return -ENOMEM;
+
+	if (copy_from_user(export_string, user_buf, count)) {
+		kfree(export_string);
+		return -EFAULT;
+	}
+
+	export_string[count-1] = '\0';   /* force null terminator */
+	token = export_string;
+	name = strsep(&token, "=");
+	if (name) {
+		struct omap_mux_partition *partition = NULL;
+		struct omap_mux *mux = NULL;
+		int mux_index, mux_mode, gpio_bank, gpio_pin, res, pin_val;
+		char *gpio_name;
+
+		mux_mode = omap_mux_get_by_name(name, &partition, &mux);
+		if (mux_mode < 0) {
+			pr_err("%s: Invalid mux name (%s). Ignoring the"
+					" value\n", __func__, name);
+			goto err_out;
+		}
+
+		name = strsep(&token, ",");
+		if (!name) {
+			pr_err("%s: Invalid value (%s). Ignoring\n",
+				__func__, token);
+			goto err_out;
+		}
+
+		res = kstrtouint(name, 0, &pin_val);
+		if (res < 0) {
+			pr_err("%s: Invalid pin mux value (%s). Ignoring\n",
+						__func__, token);
+			goto err_out;
+		}
+
+		if (token && !strncmp("rising", token, 6)) {
+			trigger = IRQF_TRIGGER_RISING;
+		} else if (token && !strncmp("falling", token, 7)) {
+			trigger = IRQF_TRIGGER_FALLING;
+		} else {
+			pr_err("%s: Invalid trigger (%s). Defaulting to"
+					" falling_rising\n", __func__, token);
+			trigger = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+		}
+
+		/* confirm whether a gpio pin exists here */
+		gpio_name = mux->muxnames[OMAP_MUX_MODE7];
+
+		if (!gpio_name) {
+			pr_err("%s: Invalid mux name (%s)\n", __func__, name);
+			goto err_out;
+		} else if (strncmp(gpio_name, "gpio", 4)) {
+			pr_err("%s: Invalid mux name found (%s)\n",
+					__func__, gpio_name);
+			goto err_out;
+		}
+
+		/*
+		 * parse the string name and get the gpio bank & pin number.
+		 * gpio_name will be in the format of "gpioX_Y" where
+		 *	X = bank
+		 *	Y = pin number
+		 */
+		gpio_bank = *(gpio_name + 4) - '0';
+
+		gpio_name += 6;
+		res = kstrtoint(gpio_name, 10, &gpio_pin);
+		if (res < 0) {
+			pr_err("%s: Invalid gpio pin number (%s). Ignoring\n",
+				__func__, gpio_name);
+			goto err_out;
+		}
+
+		mux_index = (mux->reg_offset -
+			AM33XX_CONTROL_PADCONF_GPMC_AD0_OFFSET) / 4;
+
+		if (mux_index > MAX_IO_PADCONF) {
+			pr_err("%s: Invalid index (0x%x). Ignoring\n",
+						__func__, mux_index);
+			goto err_out;
+		}
+
+		standby_gpio_array[mux_index].enabled = true;
+		standby_gpio_array[mux_index].pin_val = pin_val;
+		standby_gpio_array[mux_index].trigger = trigger;
+		standby_gpio_array[mux_index].gpio_pin =
+						((gpio_bank * 32) + gpio_pin);
+	} else {
+		pr_err("%s: Invalid mux name (%s). Ignoring the entry\n",
+						__func__, export_string);
+	}
+
+err_out:
+	*ppos += count;
+	kfree(export_string);
+	return count;
+}
+
+static int standby_gpio_pad_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, standby_gpio_status_show, inode->i_private);
+}
+
+static const struct file_operations standby_gpio_pad_conf_fops = {
+	.open		= standby_gpio_pad_open,
+	.read		= seq_read,
+	.write		= standby_gpio_pad_write,
+	.release	= single_release,
+};
+
 void am33xx_mux_dbg_create_entry(struct dentry *mux_dbg_dir)
 {
 	struct dentry *mux_dbg_suspend_io_conf_dir;
@@ -680,6 +898,10 @@ void am33xx_mux_dbg_create_entry(struct dentry *mux_dbg_dir)
 						mux_dbg_suspend_io_conf_dir,
 						&susp_io_pad_conf_enabled,
 						&susp_io_pad_fops);
+	(void)debugfs_create_file("standby_gpio_pad_conf", S_IRUGO | S_IWUSR,
+						mux_dbg_dir,
+						&susp_io_pad_conf_enabled,
+						&standby_gpio_pad_conf_fops);
 }
 
 void am33xx_setup_pinmux_on_suspend(void)
@@ -730,6 +952,92 @@ void am335x_restore_padconf(void)
 	} else {
 		for (i = 0; i < ARRAY_SIZE(am33xx_lp_padconf); i++, temp++)
 			writel(temp->val, AM33XX_CTRL_REGADDR(temp->offset));
+	}
+}
+
+/*
+ * Dummy GPIO interrupt Handler
+ */
+static irqreturn_t gpio_irq(int irq, void *dev_id)
+{
+	return IRQ_HANDLED;
+}
+
+void am33xx_standby_setup(unsigned int state)
+{
+	u32 reg_off, i;
+
+	if (state != PM_SUSPEND_STANDBY)
+		return;
+
+	writel(0x2, AM33XX_CM_PER_GPIO1_CLKCTRL);
+	writel(0x2, AM33XX_CM_PER_GPIO2_CLKCTRL);
+	writel(0x2, AM33XX_CM_PER_GPIO3_CLKCTRL);
+
+	reg_off = AM33XX_CONTROL_PADCONF_GPMC_AD0_OFFSET;
+	for (i = 0; i < MAX_IO_PADCONF; reg_off += 4, i++) {
+		if (standby_gpio_array[i].enabled) {
+			int ret, reg_val, irq;
+			u32 gpio_pin = standby_gpio_array[i].gpio_pin;
+
+			reg_val = readl(AM33XX_CTRL_REGADDR(reg_off));
+			standby_gpio_array[i].curr_pin_mux = reg_val;
+			reg_val = standby_gpio_array[i].pin_val;
+			writel(reg_val, AM33XX_CTRL_REGADDR(reg_off));
+
+			ret = gpio_request(gpio_pin, "pm_standby");
+			if (ret) {
+				pr_err("%s: Error in gpio request (%d)\n",
+						__func__, ret);
+				continue;
+			}
+			irq = gpio_to_irq(gpio_pin);
+			if (irq < 0) {
+				gpio_free(gpio_pin);
+				pr_err("%s: gpio_to_irq failed (%d)\n",
+								__func__, irq);
+				continue;
+			}
+			ret = request_irq(irq, gpio_irq,
+						standby_gpio_array[i].trigger,
+						"pm_standby", NULL);
+			if (ret) {
+				gpio_free(gpio_pin);
+				pr_err("%s: interrupt request failed (%d)\n",
+								__func__, ret);
+				continue;
+			}
+
+			standby_gpio_array[i].gpio_request_success = true;
+		}
+	}
+
+}
+
+void am33xx_standby_release(unsigned int state)
+{
+	u32 reg_off, i;
+
+	if (state != PM_SUSPEND_STANDBY)
+		return;
+
+	reg_off = AM33XX_CONTROL_PADCONF_GPMC_AD0_OFFSET;
+	for (i = 0; i < MAX_IO_PADCONF; reg_off += 4, i++) {
+		u32 gpio_pin = standby_gpio_array[i].gpio_pin;
+
+		if (standby_gpio_array[i].enabled) {
+			writel(standby_gpio_array[i].curr_pin_mux,
+						AM33XX_CTRL_REGADDR(reg_off));
+
+			if (standby_gpio_array[i].gpio_request_success ==
+									true) {
+				int irq;
+
+				irq = gpio_to_irq(gpio_pin);
+				gpio_free(gpio_pin);
+				free_irq(irq, 0);
+			}
+		}
 	}
 }
 

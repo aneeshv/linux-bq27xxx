@@ -248,6 +248,10 @@ void am335x_restore_padconf(void);
 struct dentry;
 void am33xx_mux_dbg_create_entry(struct dentry *mux_dbg_dir);
 void am33xx_setup_pinmux_on_suspend(void);
+
+void am33xx_standby_setup(unsigned int state);
+void am33xx_standby_release(unsigned int state);
+
 #endif
 
 #endif
