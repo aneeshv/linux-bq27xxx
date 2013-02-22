@@ -153,7 +153,7 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 {
 	struct iio_dev *idev = private;
 	struct adc_device *adc_dev = iio_priv(idev);
-	unsigned int status, fifo1count;
+	unsigned int status, fifo1count, config;
 
 	status = adc_readl(adc_dev, TSCADC_REG_IRQSTATUS);
 	if (status & TSCADC_IRQENB_FIFO1THRES) {
@@ -169,6 +169,22 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 		}
 		adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
 				(status | TSCADC_IRQENB_FIFO1THRES));
+		return IRQ_HANDLED;
+	} else if ((status & TSCADC_IRQENB_FIFO1OVRRUN) ||
+			(status & TSCADC_IRQENB_FIFO1UNDRFLW)) {
+		config = adc_readl(adc_dev, TSCADC_REG_CTRL);
+		config &= ~(TSCADC_CNTRLREG_TSCSSENB);
+		adc_writel(adc_dev, TSCADC_REG_CTRL, config);
+
+		if (status & TSCADC_IRQENB_FIFO1UNDRFLW)
+			adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
+			(status | TSCADC_IRQENB_FIFO1UNDRFLW));
+		else
+			adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
+				(status | TSCADC_IRQENB_FIFO1OVRRUN));
+
+		adc_writel(adc_dev, TSCADC_REG_CTRL,
+			(config | TSCADC_CNTRLREG_TSCSSENB));
 		return IRQ_HANDLED;
 	} else {
 		return IRQ_NONE;
@@ -378,6 +394,7 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 	struct adc_device	*adc_dev = NULL;
 	struct ti_tscadc_dev	*tscadc_dev = pdev->dev.platform_data;
 	struct mfd_tscadc_board	*pdata;
+	unsigned int            irqenb;
 	int			err;
 
 	pdata = (struct mfd_tscadc_board *)tscadc_dev->dev->platform_data;
@@ -404,6 +421,11 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 	idev->name = dev_name(&pdev->dev);
 	idev->modes = INDIO_DIRECT_MODE;
 	idev->info = &tiadc_info;
+
+	irqenb = adc_readl(adc_dev, TSCADC_REG_IRQENABLE);
+	adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
+			(irqenb | TSCADC_IRQENB_FIFO1OVRRUN
+			| TSCADC_IRQENB_FIFO1UNDRFLW));
 
 	adc_step_config(adc_dev);
 

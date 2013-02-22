@@ -156,11 +156,14 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 
 	/*
 	 * ADC and touchscreen share the IRQ line.
-	 * FIFO1 threshold interrupt is used by ADC,
+	 * FIFO1 threshold, FIFO1 Overrun and FIFO1 underflow
+	 * interrupts are used by ADC,
 	 * hence return from touchscreen IRQ handler if FIFO1
-	 * threshold interrupt occurred.
+	 * related interrupts occurred.
 	 */
-	if (status & TSCADC_IRQENB_FIFO1THRES)
+	if ((status & TSCADC_IRQENB_FIFO1THRES) ||
+			(status & TSCADC_IRQENB_FIFO1OVRRUN) ||
+			(status & TSCADC_IRQENB_FIFO1UNDRFLW))
 		return IRQ_NONE;
 	else if (status & TSCADC_IRQENB_FIFO0THRES) {
 		fifo0count = tscadc_readl(ts_dev, TSCADC_REG_FIFO0CNT);
