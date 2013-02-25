@@ -250,7 +250,9 @@ static int tiadc_buffer_postenable(struct iio_dev *idev)
 	} else {
 		status = adc_readl(adc_dev, TSCADC_REG_IRQENABLE);
 		adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
-				(status | TSCADC_IRQENB_FIFO1THRES));
+				(status | TSCADC_IRQENB_FIFO1THRES |
+				 TSCADC_IRQENB_FIFO1OVRRUN |
+				 TSCADC_IRQENB_FIFO1UNDRFLW));
 
 		fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
 		for (i = 0; i < fifo1count; i++)
@@ -280,7 +282,9 @@ static int tiadc_buffer_postdisable(struct iio_dev *idev)
 {
 	struct adc_device *adc_dev = iio_priv(idev);
 
-	adc_writel(adc_dev, TSCADC_REG_IRQCLR, TSCADC_IRQENB_FIFO1THRES);
+	adc_writel(adc_dev, TSCADC_REG_IRQCLR, (TSCADC_IRQENB_FIFO1THRES |
+				TSCADC_IRQENB_FIFO1OVRRUN |
+				TSCADC_IRQENB_FIFO1UNDRFLW));
 	adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB_TC);
 	return 0;
 }
@@ -394,7 +398,6 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 	struct adc_device	*adc_dev = NULL;
 	struct ti_tscadc_dev	*tscadc_dev = pdev->dev.platform_data;
 	struct mfd_tscadc_board	*pdata;
-	unsigned int            irqenb;
 	int			err;
 
 	pdata = (struct mfd_tscadc_board *)tscadc_dev->dev->platform_data;
@@ -421,11 +424,6 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 	idev->name = dev_name(&pdev->dev);
 	idev->modes = INDIO_DIRECT_MODE;
 	idev->info = &tiadc_info;
-
-	irqenb = adc_readl(adc_dev, TSCADC_REG_IRQENABLE);
-	adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
-			(irqenb | TSCADC_IRQENB_FIFO1OVRRUN
-			| TSCADC_IRQENB_FIFO1UNDRFLW));
 
 	adc_step_config(adc_dev);
 
