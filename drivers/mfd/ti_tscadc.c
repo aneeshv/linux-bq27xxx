@@ -131,11 +131,6 @@ static int __devinit ti_tscadc_probe(struct platform_device *pdev)
 	clock_rate = clk_get_rate(clk);
 	clk_put(clk);
 	clk_value = clock_rate / ADC_CLK;
-	if (clk_value < MAX_CLK_DIV) {
-		dev_err(&pdev->dev, "clock input less than min clock requirement\n");
-		err = -EINVAL;
-		goto err_fail;
-	}
 	/* TSCADC_CLKDIV needs to be configured to the value minus 1 */
 	clk_value = clk_value - 1;
 	tscadc_writel(tscadc, TSCADC_REG_CLKDIV, clk_value);
