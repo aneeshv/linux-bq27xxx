@@ -54,7 +54,7 @@ static void adc_writel(struct adc_device *adc, unsigned int reg,
 	writel(val, adc->mfd_tscadc->tscadc_base + reg);
 }
 
-static void adc_step_config(struct adc_device *adc_dev)
+static void adc_step_config(struct adc_device *adc_dev, bool mode)
 {
 	unsigned int    stepconfig;
 	int i, channels = 0, steps;
@@ -72,7 +72,11 @@ static void adc_step_config(struct adc_device *adc_dev)
 	steps = TOTAL_STEPS - adc_dev->channels;
 	channels = TOTAL_CHANNELS - adc_dev->channels;
 
-	stepconfig = TSCADC_STEPCONFIG_AVG_16 | TSCADC_STEPCONFIG_FIFO1;
+	if (mode == 0)
+		stepconfig = TSCADC_STEPCONFIG_AVG_16 | TSCADC_STEPCONFIG_FIFO1;
+	else
+		stepconfig = TSCADC_STEPCONFIG_AVG_16 | TSCADC_STEPCONFIG_FIFO1
+			| TSCADC_STEPCONFIG_MODE_SWCNT;
 
 	for (i = (steps + 1); i <= TOTAL_STEPS; i++) {
 		adc_writel(adc_dev, TSCADC_REG_STEPCONFIG(i),
@@ -425,7 +429,8 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 	idev->modes = INDIO_DIRECT_MODE;
 	idev->info = &tiadc_info;
 
-	adc_step_config(adc_dev);
+	/* by default driver comes up with oneshot mode */
+	adc_step_config(adc_dev, adc_dev->is_continuous_mode);
 
 	/* program FIFO threshold to value minus 1 */
 	adc_writel(adc_dev, TSCADC_REG_FIFO1THR, FIFO1_THRESHOLD);
@@ -505,12 +510,13 @@ static int adc_resume(struct platform_device *pdev)
 	struct adc_device	*adc_dev = tscadc_dev->adc;
 	unsigned int restore;
 
+	adc_writel(adc_dev, TSCADC_REG_FIFO1THR, FIFO1_THRESHOLD);
+	adc_step_config(adc_dev, adc_dev->is_continuous_mode);
+
 	/* Make sure ADC is powered up */
 	restore = adc_readl(adc_dev, TSCADC_REG_CTRL);
 	restore &= ~(TSCADC_CNTRLREG_POWERDOWN);
 	adc_writel(adc_dev, TSCADC_REG_CTRL, restore);
-
-	adc_step_config(adc_dev);
 	return 0;
 }
 

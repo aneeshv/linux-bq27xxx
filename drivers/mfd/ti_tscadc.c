@@ -222,6 +222,8 @@ static int tscadc_suspend(struct platform_device *pdev, pm_message_t state)
 	struct ti_tscadc_dev	*tscadc_dev = platform_get_drvdata(pdev);
 
 	tscadc_writel(tscadc_dev, TSCADC_REG_SE, 0x00);
+	tscadc_dev->irqstat = tscadc_readl(tscadc_dev, TSCADC_REG_IRQENABLE);
+	tscadc_dev->ctrl = tscadc_readl(tscadc_dev, TSCADC_REG_CTRL);
 	pm_runtime_put_sync(&pdev->dev);
 	return 0;
 }
@@ -230,26 +232,15 @@ static int tscadc_resume(struct platform_device *pdev)
 {
 	struct ti_tscadc_dev	*tscadc_dev = platform_get_drvdata(pdev);
 	struct mfd_tscadc_board	*pdata = pdev->dev.platform_data;
-	unsigned int restore, ctrl;
 
 	pm_runtime_get_sync(&pdev->dev);
 
 	/* context restore */
-	ctrl = TSCADC_CNTRLREG_STEPCONFIGWRT |
-			TSCADC_CNTRLREG_STEPID;
-
-	if (pdata->tsc_init)
-		ctrl |= TSCADC_CNTRLREG_4WIRE |
-				TSCADC_CNTRLREG_TSCENB;
-	tscadc_writel(tscadc_dev, TSCADC_REG_CTRL, ctrl);
-
+	tscadc_writel(tscadc_dev, TSCADC_REG_IRQENABLE, tscadc_dev->irqstat);
 	if (pdata->tsc_init)
 		tscadc_idle_config(tscadc_dev);
-	tscadc_writel(tscadc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB);
-	restore = tscadc_readl(tscadc_dev, TSCADC_REG_CTRL);
-	tscadc_writel(tscadc_dev, TSCADC_REG_CTRL,
-			(restore | TSCADC_CNTRLREG_TSCSSENB));
-
+	tscadc_writel(tscadc_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB_TC);
+	tscadc_writel(tscadc_dev, TSCADC_REG_CTRL, tscadc_dev->ctrl);
 	return 0;
 }
 

@@ -159,4 +159,8 @@ struct ti_tscadc_dev {
 
 	/* adc device */
 	struct adc_device *adc;
+
+	/* Context save */
+	unsigned int irqstat;
+	unsigned int ctrl;
 };
