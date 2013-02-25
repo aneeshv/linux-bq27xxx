@@ -157,11 +157,10 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 {
 	struct iio_dev *idev = private;
 	struct adc_device *adc_dev = iio_priv(idev);
-	unsigned int status, fifo1count, config;
+	unsigned int status, config;
 
 	status = adc_readl(adc_dev, TSCADC_REG_IRQSTATUS);
 	if (status & TSCADC_IRQENB_FIFO1THRES) {
-		fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
 		adc_writel(adc_dev, TSCADC_REG_IRQCLR,
 				TSCADC_IRQENB_FIFO1THRES);
 
