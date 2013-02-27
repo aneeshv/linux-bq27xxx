@@ -413,7 +413,7 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 	if (idev == NULL) {
 		dev_err(&pdev->dev, "failed to allocate iio device.\n");
 		err = -ENOMEM;
-		goto err_allocate;
+		goto err_ret;
 	}
 	adc_dev = iio_priv(idev);
 
@@ -436,23 +436,23 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 
 	err = tiadc_channel_init(idev, adc_dev);
 	if (err < 0)
-		goto err_cleanup_channels;
+		goto err_free_device;
 
 	init_waitqueue_head(&adc_dev->wq_data_avail);
 
 	err = request_irq(adc_dev->irq, tiadc_irq, IRQF_SHARED,
 		idev->name, idev);
 	if (err)
-		goto err_unregister;
+		goto err_cleanup_channels;
 
 	err = tiadc_config_sw_ring(idev);
 	if (err)
-		goto err_unregister;
+		goto err_free_irq;
 
 	err = iio_buffer_register(idev,
 			idev->channels, idev->num_channels);
 	if (err < 0)
-		goto err_unregister;
+		goto err_free_sw_rb;
 
 	err = iio_device_register(idev);
 	if (err)
@@ -464,11 +464,16 @@ static int __devinit tiadc_probe(struct platform_device *pdev)
 	return 0;
 
 err_unregister:
-	tiadc_channel_remove(idev);
+	iio_buffer_unregister(idev);
+err_free_sw_rb:
+	iio_sw_rb_free(idev->buffer);
+err_free_irq:
+	free_irq(adc_dev->irq, idev);
 err_cleanup_channels:
-	iio_device_unregister(idev);
+	tiadc_channel_remove(idev);
+err_free_device:
 	iio_free_device(idev);
-err_allocate:
+err_ret:
 	return err;
 }
 
@@ -478,7 +483,10 @@ static int __devexit tiadc_remove(struct platform_device *pdev)
 	struct adc_device	*adc_dev = tscadc_dev->adc;
 	struct iio_dev		*idev = adc_dev->idev;
 
+	free_irq(adc_dev->irq, idev);
 	iio_device_unregister(idev);
+	iio_buffer_unregister(idev);
+	iio_sw_rb_free(idev->buffer);
 	tiadc_channel_remove(idev);
 
 	tscadc_dev->adc = NULL;
