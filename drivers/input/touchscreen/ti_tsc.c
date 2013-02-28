@@ -159,7 +159,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 	unsigned int		cur_diff_x = 0, cur_diff_y = 0;
 	unsigned int		val_x = 0, val_y = 0, diffx = 0, diffy = 0;
 	unsigned int		z1 = 0, z2 = 0, z = 0;
-	unsigned int		channel;
+	unsigned int		channel, config;
 
 	status = tscadc_readl(ts_dev, TSCADC_REG_IRQSTATUS);
 
@@ -174,7 +174,23 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 			(status & TSCADC_IRQENB_FIFO1OVRRUN) ||
 			(status & TSCADC_IRQENB_FIFO1UNDRFLW))
 		return IRQ_NONE;
-	else if (status & TSCADC_IRQENB_FIFO0THRES) {
+	else if ((status & TSCADC_IRQENB_FIFO0OVRRUN) ||
+			(status & TSCADC_IRQENB_FIFO0UNDRFLW)) {
+		config = tscadc_readl(ts_dev, TSCADC_REG_CTRL);
+		config &= ~(TSCADC_CNTRLREG_TSCSSENB);
+		tscadc_writel(ts_dev, TSCADC_REG_CTRL, config);
+
+		if (status & TSCADC_IRQENB_FIFO0UNDRFLW)
+			tscadc_writel(ts_dev, TSCADC_REG_IRQSTATUS,
+			(status | TSCADC_IRQENB_FIFO0UNDRFLW));
+		else
+			tscadc_writel(ts_dev, TSCADC_REG_IRQSTATUS,
+				(status | TSCADC_IRQENB_FIFO0OVRRUN));
+
+		tscadc_writel(ts_dev, TSCADC_REG_CTRL,
+			(config | TSCADC_CNTRLREG_TSCSSENB));
+		return IRQ_HANDLED;
+	} else if (status & TSCADC_IRQENB_FIFO0THRES) {
 		for (i = 0; i < ts_dev->steps_to_config; i++) {
 			readx1 = tscadc_readl(ts_dev, TSCADC_REG_FIFO0);
 			channel = readx1 & 0xf0000;
@@ -358,7 +374,8 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 	ts_dev->y.inverted = pdata->tsc_init->y.inverted;
 
 	/* IRQ Enable */
-	irqenable = TSCADC_IRQENB_FIFO0THRES;
+	irqenable = TSCADC_IRQENB_FIFO0THRES | TSCADC_IRQENB_FIFO0OVRRUN |
+		TSCADC_IRQENB_FIFO0UNDRFLW;
 	tscadc_writel(ts_dev, TSCADC_REG_IRQENABLE, irqenable);
 
 	tsc_step_config(ts_dev);
