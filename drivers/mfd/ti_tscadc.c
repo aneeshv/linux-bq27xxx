@@ -227,10 +227,14 @@ static int tscadc_resume(struct platform_device *pdev)
 {
 	struct ti_tscadc_dev	*tscadc_dev = platform_get_drvdata(pdev);
 	struct mfd_tscadc_board	*pdata = pdev->dev.platform_data;
+	unsigned int irq_read;
 
 	pm_runtime_get_sync(&pdev->dev);
 
 	/* context restore */
+	irq_read = tscadc_readl(tscadc_dev, TSCADC_REG_IRQSTATUS);
+	tscadc_writel(tscadc_dev, TSCADC_REG_IRQSTATUS, irq_read);
+
 	tscadc_writel(tscadc_dev, TSCADC_REG_IRQENABLE, tscadc_dev->irqstat);
 	if (pdata->tsc_init)
 		tscadc_idle_config(tscadc_dev);

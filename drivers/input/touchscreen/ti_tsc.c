@@ -434,6 +434,8 @@ static int tsc_resume(struct platform_device *pdev)
 {
 	struct ti_tscadc_dev	*tscadc_dev = pdev->dev.platform_data;
 	struct tscadc		*ts_dev = tscadc_dev->tsc;
+	unsigned int		fifo0count;
+	int i;
 
 	if (device_may_wakeup(tscadc_dev->dev)) {
 		tscadc_writel(ts_dev, TSCADC_REG_IRQWAKEUP,
@@ -445,6 +447,9 @@ static int tsc_resume(struct platform_device *pdev)
 	/* Configure to value minus 1 */
 	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR,
 			ts_dev->steps_to_config * 2 + 1);
+	fifo0count = tscadc_readl(ts_dev, TSCADC_REG_FIFO0CNT);
+	for (i = 0; i < fifo0count; i++)
+		tscadc_readl(ts_dev, TSCADC_REG_FIFO0);
 	return 0;
 }
 
