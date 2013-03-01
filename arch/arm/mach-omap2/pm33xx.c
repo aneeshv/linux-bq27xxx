@@ -193,7 +193,7 @@ static int am33xx_pm_suspend(void)
 	 * Disable it here.
 	 */
 	if (suspend_state == PM_SUSPEND_STANDBY)
-		writel(0x2, AM33XX_CM_WKUP_ADC_TSC_CLKCTRL);
+		writel(0x0, AM33XX_CM_WKUP_ADC_TSC_CLKCTRL);
 
 	/*
 	 * Put USB module to idle on resume from standby
