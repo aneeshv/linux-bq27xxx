@@ -94,7 +94,7 @@ static void tsc_step_config(struct tscadc *ts_dev)
 
 	stepconfigy = TSCADC_STEPCONFIG_MODE_HWSYNC |
 			TSCADC_STEPCONFIG_AVG_16 | TSCADC_STEPCONFIG_YNN |
-			TSCADC_STEPCONFIG_INM_ADCREFM | TSCADC_STEPCONFIG_FIFO1;
+			TSCADC_STEPCONFIG_INM_ADCREFM;
 	switch (ts_dev->wires) {
 	case 4:
 		stepconfigy |= TSCADC_STEPCONFIG_YPP;
@@ -125,8 +125,7 @@ static void tsc_step_config(struct tscadc *ts_dev)
 	stepconfigz1 = TSCADC_STEPCONFIG_MODE_HWSYNC |
 			TSCADC_STEPCONFIG_AVG_16 | TSCADC_STEPCONFIG_XNP |
 			TSCADC_STEPCONFIG_YPN | TSCADC_STEPCONFIG_INM_ADCREFM;
-	stepconfigz2 = stepconfigz1 | TSCADC_STEPCONFIG_INP_AN3 |
-				TSCADC_STEPCONFIG_FIFO1;
+	stepconfigz2 = stepconfigz1 | TSCADC_STEPCONFIG_INP_AN3;
 	tscadc_writel(ts_dev, TSCADC_REG_STEPCONFIG(total_steps + 1),
 						stepconfigz1);
 	tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY(total_steps + 1), delay);
@@ -134,7 +133,17 @@ static void tsc_step_config(struct tscadc *ts_dev)
 						stepconfigz2);
 	tscadc_writel(ts_dev, TSCADC_REG_STEPDELAY(total_steps + 2), delay);
 
-	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB_TC);
+	/*
+	 * ts_dev->steps_to_config holds the number of steps to used to
+	 * read X/Y samples. Hence Multiply by 2, to account for both
+	 * X and Y samples.
+	 * Add 3 to account for pressure values being read.
+	 * Subtract 1 because in the Step enable register the last bit is
+	 * used to set the charge bit.
+	 */
+	tscadc_writel(ts_dev, TSCADC_REG_SE, tscadc_readl
+			(ts_dev, TSCADC_REG_SE) |
+			((1 << ((ts_dev->steps_to_config * 2)  + 3)) - 1));
 }
 
 static irqreturn_t tscadc_interrupt(int irq, void *dev)
@@ -143,7 +152,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 	struct input_dev	*input_dev = ts_dev->input;
 	unsigned int		status, irqclr = 0;
 	int			i;
-	int			fsm = 0, fifo0count = 0, fifo1count = 0;
+	int			fsm = 0, fifo0count = 0;
 	unsigned int		readx1 = 0, ready1 = 0;
 	unsigned int		prev_val_x = ~0, prev_val_y = ~0;
 	unsigned int		prev_diff_x = ~0, prev_diff_y = ~0;
@@ -166,9 +175,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 			(status & TSCADC_IRQENB_FIFO1UNDRFLW))
 		return IRQ_NONE;
 	else if (status & TSCADC_IRQENB_FIFO0THRES) {
-		fifo0count = tscadc_readl(ts_dev, TSCADC_REG_FIFO0CNT);
-		fifo1count = tscadc_readl(ts_dev, TSCADC_REG_FIFO1CNT);
-		for (i = 0; i < (fifo0count-1); i++) {
+		for (i = 0; i < ts_dev->steps_to_config; i++) {
 			readx1 = tscadc_readl(ts_dev, TSCADC_REG_FIFO0);
 			channel = readx1 & 0xf0000;
 			channel = channel >> 0x10;
@@ -190,8 +197,9 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 				}
 				prev_val_x = readx1;
 			}
-
-			ready1 = tscadc_readl(ts_dev, TSCADC_REG_FIFO1);
+		}
+		for (i = 0; i < ts_dev->steps_to_config; i++) {
+			ready1 = tscadc_readl(ts_dev, TSCADC_REG_FIFO0);
 			channel = ready1 & 0xf0000;
 			channel = channel >> 0x10;
 			if ((channel >= ts_dev->steps_to_config) &&
@@ -225,11 +233,7 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 		bckup_y = val_y;
 
 		z1 = ((tscadc_readl(ts_dev, TSCADC_REG_FIFO0)) & 0xfff);
-		z2 = ((tscadc_readl(ts_dev, TSCADC_REG_FIFO1)) & 0xfff);
-
-		fifo1count = tscadc_readl(ts_dev, TSCADC_REG_FIFO1CNT);
-		for (i = 0; i < fifo1count; i++)
-			tscadc_readl(ts_dev, TSCADC_REG_FIFO1);
+		z2 = ((tscadc_readl(ts_dev, TSCADC_REG_FIFO0)) & 0xfff);
 
 		fifo0count = tscadc_readl(ts_dev, TSCADC_REG_FIFO0CNT);
 		for (i = 0; i < fifo0count; i++)
@@ -292,7 +296,9 @@ static irqreturn_t tscadc_interrupt(int irq, void *dev)
 
 	tscadc_writel(ts_dev, TSCADC_REG_IRQSTATUS, (status | irqclr));
 
-	tscadc_writel(ts_dev, TSCADC_REG_SE, TSCADC_STPENB_STEPENB_TC);
+	tscadc_writel(ts_dev, TSCADC_REG_SE,
+			tscadc_readl(ts_dev, TSCADC_REG_SE) |
+			((1 << ((ts_dev->steps_to_config * 2)  + 3)) - 1));
 	return IRQ_HANDLED;
 }
 
@@ -357,7 +363,8 @@ static	int __devinit tscadc_probe(struct platform_device *pdev)
 
 	tsc_step_config(ts_dev);
 
-	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR, ts_dev->steps_to_config);
+	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR,
+			ts_dev->steps_to_config * 2 + 1);
 
 	input_dev->name = "ti-tsc";
 	input_dev->dev.parent = &pdev->dev;
@@ -435,8 +442,9 @@ static int tsc_resume(struct platform_device *pdev)
 				TSCADC_IRQENB_HW_PEN);
 	}
 	tsc_step_config(ts_dev);
+	/* Configure to value minus 1 */
 	tscadc_writel(ts_dev, TSCADC_REG_FIFO0THR,
-			ts_dev->steps_to_config);
+			ts_dev->steps_to_config * 2 + 1);
 	return 0;
 }
 
