@@ -41,7 +41,7 @@ static int evm_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret = 0;
-	unsigned sysclk;
+	unsigned sysclk = 12000000;
 
 	/* ASP1 on DM355 EVM is clocked by an external oscillator */
 	if (machine_is_davinci_dm355_evm() || machine_is_davinci_dm6467_evm() ||
