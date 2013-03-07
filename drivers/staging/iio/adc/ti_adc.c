@@ -110,30 +110,22 @@ static ssize_t tiadc_set_mode(struct device *dev,
 {
 	struct iio_dev *indio_dev = dev_get_drvdata(dev);
 	struct adc_device *adc_dev = iio_priv(indio_dev);
-	int i, channels = 0, steps;
-	unsigned int stepconfig, config;
-
-	steps = (TOTAL_STEPS - adc_dev->channels) + 1;
-	channels = TOTAL_CHANNELS - adc_dev->channels;
+	unsigned int config;
 
 	config = adc_readl(adc_dev, TSCADC_REG_CTRL);
 	config &= ~(TSCADC_CNTRLREG_TSCSSENB);
 	adc_writel(adc_dev, TSCADC_REG_CTRL, config);
 
-	stepconfig = adc_readl(adc_dev, TSCADC_REG_STEPCONFIG(steps));
-
-	for (i = steps; i <= TOTAL_STEPS; i++) {
-		if (!strncmp(buf, "oneshot", 7)) {
-			stepconfig &= ~(TSCADC_STEPCONFIG_MODE_SWCNT);
-			adc_writel(adc_dev, TSCADC_REG_STEPCONFIG(i),
-						stepconfig);
-			adc_dev->is_continuous_mode = false;
-		} else if (!strncmp(buf, "continuous", 10)) {
-			adc_writel(adc_dev, TSCADC_REG_STEPCONFIG(i),
-				stepconfig | TSCADC_STEPCONFIG_MODE_SWCNT);
-			adc_dev->is_continuous_mode = true;
-		}
+	if (!strncmp(buf, "oneshot", 7))
+		adc_dev->is_continuous_mode = false;
+	else if (!strncmp(buf, "continuous", 10))
+		adc_dev->is_continuous_mode = true;
+	else {
+		dev_err(dev, "Operational mode unknown\n");
+		return -EINVAL;
 	}
+
+	adc_step_config(adc_dev, adc_dev->is_continuous_mode);
 
 	config = adc_readl(adc_dev, TSCADC_REG_CTRL);
 	adc_writel(adc_dev, TSCADC_REG_CTRL,
@@ -274,8 +266,8 @@ static int tiadc_buffer_postenable(struct iio_dev *idev)
 			 */
 			stepnum = chan->channel + 9;
 			enb = adc_readl(adc_dev, TSCADC_REG_SE);
-			enb |= stepnum;
-			adc_writel(adc_dev, TSCADC_REG_SE, TSCADC_ENB(enb));
+			enb |= (1 << stepnum);
+			adc_writel(adc_dev, TSCADC_REG_SE, enb);
 		}
 		return 0;
 	}
