@@ -821,8 +821,8 @@ static int lcd_init(struct da8xx_fb_par *par, const struct lcd_ctrl_config *cfg,
 int register_vsync_cb(vsync_callback_t handler, void *arg, int idx)
 {
 	if ((vsync_cb_handler == NULL) && (vsync_cb_arg == NULL)) {
-		vsync_cb_handler = handler;
 		vsync_cb_arg = arg;
+		vsync_cb_handler = handler;
 	} else {
 		return -EEXIST;
 	}
