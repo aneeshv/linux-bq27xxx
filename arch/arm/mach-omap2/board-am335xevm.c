@@ -3042,7 +3042,7 @@ static void am335x_rtc_init(int evm_id, int profile)
 	clk_disable(clk);
 	clk_put(clk);
 
-	if (omap_rev() == AM335X_REV_ES2_0)
+	if (omap_rev() >= AM335X_REV_ES2_0)
 		am335x_rtc_info.wakeup_capable = 1;
 
 	oh = omap_hwmod_lookup("rtc");
