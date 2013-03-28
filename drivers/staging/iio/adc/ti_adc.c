@@ -192,6 +192,13 @@ static void tiadc_poll_handler(struct work_struct *work_s)
 	u32 *iBuf;
 
 	fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
+	if (fifo1count * sizeof(u32) <
+				buffer->access->get_bytes_per_datum(buffer)) {
+		dev_err(adc_dev->mfd_tscadc->dev, "%s: Short FIFO event\n",
+								__func__);
+		goto out;
+	}
+
 	iBuf = kmalloc((fifo1count + 1) * sizeof(u32), GFP_KERNEL);
 	if (iBuf == NULL)
 		goto out;
