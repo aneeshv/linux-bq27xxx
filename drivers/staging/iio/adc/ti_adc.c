@@ -159,7 +159,8 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 
 		adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
 				TSCADC_IRQENB_FIFO1OVRRUN |
-				TSCADC_IRQENB_FIFO1UNDRFLW);
+				TSCADC_IRQENB_FIFO1UNDRFLW |
+				TSCADC_IRQENB_FIFO1THRES);
 
 		adc_writel(adc_dev, TSCADC_REG_CTRL,
 			(config | TSCADC_CNTRLREG_TSCSSENB));
