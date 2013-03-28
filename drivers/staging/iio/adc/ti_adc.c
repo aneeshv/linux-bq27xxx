@@ -174,8 +174,6 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 		} else {
 			wake_up_interruptible(&adc_dev->wq_data_avail);
 		}
-		adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
-				TSCADC_IRQENB_FIFO1THRES);
 		return IRQ_HANDLED;
 	} else {
 		return IRQ_NONE;
@@ -212,6 +210,8 @@ static void tiadc_poll_handler(struct work_struct *work_s)
 	}
 
 	buffer->access->store_to(buffer, (u8 *) iBuf, iio_get_time_ns());
+	adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
+				TSCADC_IRQENB_FIFO1THRES);
 	adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
 				TSCADC_IRQENB_FIFO1THRES);
 
