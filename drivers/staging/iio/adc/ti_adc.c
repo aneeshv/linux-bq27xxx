@@ -194,7 +194,7 @@ static void tiadc_poll_handler(struct work_struct *work_s)
 	fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
 	iBuf = kmalloc((fifo1count + 1) * sizeof(u32), GFP_KERNEL);
 	if (iBuf == NULL)
-		return;
+		goto out;
 
 	/*
 	 * Wait for ADC sequencer to settle down.
@@ -211,12 +211,13 @@ static void tiadc_poll_handler(struct work_struct *work_s)
 	}
 
 	buffer->access->store_to(buffer, (u8 *) iBuf, iio_get_time_ns());
+	kfree(iBuf);
+
+out:
 	adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
 				TSCADC_IRQENB_FIFO1THRES);
 	adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
 				TSCADC_IRQENB_FIFO1THRES);
-
-	kfree(iBuf);
 }
 
 static int tiadc_buffer_preenable(struct iio_dev *idev)
