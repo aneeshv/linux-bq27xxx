@@ -231,22 +231,29 @@ static int tiadc_buffer_postenable(struct iio_dev *idev)
 {
 	struct adc_device *adc_dev = iio_priv(idev);
 	struct iio_buffer *buffer = idev->buffer;
-	unsigned int enb, fifo1count;
-	int stepnum, i;
+	unsigned int enb, config;
+	int stepnum;
 	u8 bit;
 
 	if (!adc_dev->is_continuous_mode) {
 		pr_info("Data cannot be read continuously in one shot mode\n");
 		return -EINVAL;
 	} else {
-		adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
-				(TSCADC_IRQENB_FIFO1THRES |
-				 TSCADC_IRQENB_FIFO1OVRRUN |
-				 TSCADC_IRQENB_FIFO1UNDRFLW));
 
-		fifo1count = adc_readl(adc_dev, TSCADC_REG_FIFO1CNT);
-		for (i = 0; i < fifo1count; i++)
-			adc_readl(adc_dev, TSCADC_REG_FIFO1);
+		config = adc_readl(adc_dev, TSCADC_REG_CTRL);
+		adc_writel(adc_dev, TSCADC_REG_CTRL,
+					config & ~TSCADC_CNTRLREG_TSCSSENB);
+		adc_writel(adc_dev, TSCADC_REG_CTRL,
+					config | TSCADC_CNTRLREG_TSCSSENB);
+
+
+		adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
+				TSCADC_IRQENB_FIFO1THRES |
+				TSCADC_IRQENB_FIFO1OVRRUN |
+				TSCADC_IRQENB_FIFO1UNDRFLW);
+		adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
+				TSCADC_IRQENB_FIFO1THRES |
+				TSCADC_IRQENB_FIFO1OVRRUN);
 
 		adc_writel(adc_dev, TSCADC_REG_SE, 0x00);
 		for_each_set_bit(bit, buffer->scan_mask,
