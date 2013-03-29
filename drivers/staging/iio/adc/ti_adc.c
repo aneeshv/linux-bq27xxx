@@ -510,12 +510,16 @@ static int adc_resume(struct platform_device *pdev)
 	struct adc_device	*adc_dev = tscadc_dev->adc;
 	unsigned int restore;
 
+	restore = adc_readl(adc_dev, TSCADC_REG_CTRL);
+	restore &= ~(TSCADC_CNTRLREG_TSCSSENB);
+	adc_writel(adc_dev, TSCADC_REG_CTRL, restore);
+
 	adc_writel(adc_dev, TSCADC_REG_FIFO1THR, FIFO1_THRESHOLD);
 	adc_step_config(adc_dev, adc_dev->is_continuous_mode);
 
 	/* Make sure ADC is powered up */
-	restore = adc_readl(adc_dev, TSCADC_REG_CTRL);
 	restore &= ~(TSCADC_CNTRLREG_POWERDOWN);
+	restore |= TSCADC_CNTRLREG_TSCSSENB;
 	adc_writel(adc_dev, TSCADC_REG_CTRL, restore);
 	return 0;
 }
