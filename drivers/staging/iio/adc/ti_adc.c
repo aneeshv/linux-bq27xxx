@@ -22,7 +22,6 @@
 #include <linux/platform_device.h>
 #include <linux/io.h>
 #include <linux/sched.h>
-#include <linux/delay.h>
 
 #include "../iio.h"
 #include "../sysfs.h"
@@ -202,14 +201,6 @@ static void tiadc_poll_handler(struct work_struct *work_s)
 	iBuf = kmalloc(fifo1count * sizeof(u32), GFP_KERNEL);
 	if (iBuf == NULL)
 		goto out;
-
-	/*
-	 * Wait for ADC sequencer to settle down.
-	 * There could be a scenario where in we
-	 * try to read data from ADC before
-	 * it is available.
-	 */
-	udelay(500);
 
 	for (i = 0; i < fifo1count; i++) {
 		readx1 = adc_readl(adc_dev, TSCADC_REG_FIFO1);
