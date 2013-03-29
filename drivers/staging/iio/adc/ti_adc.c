@@ -199,7 +199,7 @@ static void tiadc_poll_handler(struct work_struct *work_s)
 		goto out;
 	}
 
-	iBuf = kmalloc((fifo1count + 1) * sizeof(u32), GFP_KERNEL);
+	iBuf = kmalloc(fifo1count * sizeof(u32), GFP_KERNEL);
 	if (iBuf == NULL)
 		goto out;
 
