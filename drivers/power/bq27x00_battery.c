@@ -39,26 +39,83 @@
 #include <linux/power/bq27x00_battery.h>
 
 #define DRIVER_VERSION			"1.2.0"
+#define G3_FW_VERSION			0x0324
+#define L1_FW_VERSION			0x0600
 
-#define BQ27x00_REG_TEMP		0x06
-#define BQ27x00_REG_VOLT		0x08
-#define BQ27x00_REG_AI			0x14
-#define BQ27x00_REG_FLAGS		0x0A
-#define BQ27x00_REG_TTE			0x16
-#define BQ27x00_REG_TTF			0x18
-#define BQ27x00_REG_TTECP		0x26
-#define BQ27x00_REG_NAC			0x0C /* Nominal available capaciy */
-#define BQ27x00_REG_LMD			0x12 /* Last measured discharge */
-#define BQ27x00_REG_CYCT		0x2A /* Cycle count total */
-#define BQ27x00_REG_AE			0x22 /* Available enery */
+#define INVALID_REG_ADDR		0xFF
 
-#define BQ27000_REG_RSOC		0x0B /* Relative State-of-Charge */
-#define BQ27000_REG_ILMD		0x76 /* Initial last measured discharge */
+enum bq27x00_reg_index {
+	BQ27x00_REG_TEMP = 0,
+	BQ27x00_REG_INT_TEMP,
+	BQ27x00_REG_VOLT,
+	BQ27x00_REG_AI,
+	BQ27x00_REG_FLAGS,
+	BQ27x00_REG_TTE,
+	BQ27x00_REG_TTF,
+	BQ27x00_REG_TTES,
+	BQ27x00_REG_TTECP,
+	BQ27x00_REG_NAC,
+	BQ27x00_REG_LMD,
+	BQ27x00_REG_CYCT,
+	BQ27x00_REG_AE,
+	BQ27000_REG_RSOC,
+	BQ27000_REG_ILMD,
+	BQ27500_REG_SOC,
+	BQ27500_REG_DCAP,
+	BQ27500_REG_CTRL
+};
+
+/* TI G3 Firmware (v3.24) */
+static u8 bq27x00_fw_g3_regs[] = {
+	0x06,
+	0x36,
+	0x08,
+	0x14,
+	0x0A,
+	0x16,
+	0x18,
+	0x1c,
+	0x26,
+	0x0C,
+	0x12,
+	0x2A,
+	0x22,
+	0x0B,
+	0x76,
+	0x2C,
+	0x3C,
+	0x00
+};
+
+/*
+ * TI L1 firmware (v6.00)
+ * Some of the commented registers are missing in this fw.
+ * Mark them as 0xFF for being invalid
+ */
+static u8 bq27x00_fw_l1_regs[] = {
+	0x06,
+	0x28,
+	0x08,
+	0x14,
+	0x0A,
+	0x16,
+	0xFF, /* TTF */
+	0x1A,
+	0xFF, /* TTECP */
+	0x0C,
+	0xFF, /* LMD */
+	0x1E,
+	0xFF, /* AE */
+	0xFF, /* RSOC */
+	0xFF, /* ILMD */
+	0x20,
+	0x2E,
+	0x00
+};
+
 #define BQ27000_FLAG_CHGS		BIT(7)
 #define BQ27000_FLAG_FC			BIT(5)
 
-#define BQ27500_REG_SOC			0x2C
-#define BQ27500_REG_DCAP		0x3C /* Design capacity */
 #define BQ27500_FLAG_DSC		BIT(0)
 #define BQ27500_FLAG_FC			BIT(9)
 
@@ -67,6 +124,8 @@
 struct bq27x00_device_info;
 struct bq27x00_access_methods {
 	int (*read)(struct bq27x00_device_info *di, u8 reg, bool single);
+	int (*write)(struct bq27x00_device_info *di, u8 reg, int value,
+			bool single);
 };
 
 enum bq27x00_chip { BQ27000, BQ27500 };
@@ -101,6 +160,7 @@ struct bq27x00_device_info {
 
 	struct mutex lock;
 
+	u8 *regs;
 	int fw_ver;
 };
 
@@ -131,10 +191,27 @@ MODULE_PARM_DESC(poll_interval, "battery poll interval in seconds - " \
  * Common code for BQ27x00 devices
  */
 
-static inline int bq27x00_read(struct bq27x00_device_info *di, u8 reg,
+static inline int bq27x00_read(struct bq27x00_device_info *di, int reg_index,
 		bool single)
 {
-	return di->bus.read(di, reg, single);
+	int val;
+
+	/* Reports 0 for invalid/missing registers */
+	if (!di || !di->regs || di->regs[reg_index] == INVALID_REG_ADDR)
+		return 0;
+
+	val = di->bus.read(di, di->regs[reg_index], single);
+
+	return val;
+}
+
+static inline int bq27x00_write(struct bq27x00_device_info *di, int reg_index,
+		int value, bool single)
+{
+	if (!di || !di->regs || di->regs[reg_index] == INVALID_REG_ADDR)
+		return -1;
+
+	return di->bus.write(di, di->regs[reg_index], value, single);
 }
 
 /*
@@ -746,9 +823,21 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 	di->chip = id->driver_data;
 	di->bat.name = name;
 	di->bus.read = &bq27x00_read_i2c;
+	di->bus.write = &bq27x00_write_i2c;
 
+	/* Get the fw version to determine the register mapping */
 	di->fw_ver = bq27x00_battery_read_fw_version(di);
 	dev_info(&client->dev, "Gas Guage fw version is 0x%04x\n", di->fw_ver);
+
+	if (di->fw_ver == L1_FW_VERSION)
+		di->regs = bq27x00_fw_l1_regs;
+	else if (di->fw_ver == G3_FW_VERSION)
+		di->regs = bq27x00_fw_g3_regs;
+	else {
+		dev_err(&client->dev,
+			"Unkown Gas Guage fw version: 0x%04x\n", di->fw_ver);
+		di->regs = bq27x00_fw_g3_regs;
+	}
 
 	if (bq27x00_powersupply_init(di))
 		goto batt_failed_3;
