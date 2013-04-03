@@ -70,17 +70,7 @@ struct cppi41_dma_sched_tbl_t {
 	u8      enb;
 };
 
-struct cppi41_dma_sched_tbl_t dma_sched_tbl[MAX_SCHED_TBL_ENTRY] = {
-	/*pos  dma_ch#  is_tx  enb/dis*/
-	{ 0,    0,      0,      1},
-	{ 1,    0,      1,      1},
-	{ 2,    1,      0,      1},
-	{ 3,    1,      1,      1},
-	{ 4,    2,      0,      1},
-	{ 5,    2,      1,      1},
-	{ 6,    3,      0,      1},
-	{ 7,    3,      1,      1}
-};
+struct cppi41_dma_sched_tbl_t dma_sched_tbl[MAX_SCHED_TBL_ENTRY];
 
 struct cppi41_queue_mgr cppi41_queue_mgr[CPPI41_NUM_QUEUE_MGR];
 EXPORT_SYMBOL(cppi41_queue_mgr);
@@ -341,6 +331,18 @@ int cppi41_dma_block_init(u8 dma_num, u8 q_mgr, u8 num_order,
 	 * for the CPPI 4.1 system.
 	 */
 	cppi41_init_teardown_queue(dma_num);
+
+	for (i = 0; i < MAX_SCHED_TBL_ENTRY; i += 2) {
+		dma_sched_tbl[i].pos = i;
+		dma_sched_tbl[i].dma_ch = i;
+		dma_sched_tbl[i].is_tx = 1;
+		dma_sched_tbl[i].enb = 1;
+
+		dma_sched_tbl[i+1].pos = i + 1;
+		dma_sched_tbl[i+1].dma_ch = i;
+		dma_sched_tbl[i+1].is_tx = 0;
+		dma_sched_tbl[i+1].enb = 1;
+	}
 
 	/* Initialize the DMA scheduler. */
 	num_reg = (tbl_size + 3) / 4;

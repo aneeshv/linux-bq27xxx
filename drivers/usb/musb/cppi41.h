@@ -203,7 +203,7 @@
  * DMA Scheduler - Table Region
  */
 #define DMA_SCHED_TABLE_WORD_REG(n)	((n) << 2)
-#define MAX_SCHED_TBL_ENTRY     8
+#define MAX_SCHED_TBL_ENTRY     60
 
 /*
  * CPPI 4.1 Host Packet Descriptor

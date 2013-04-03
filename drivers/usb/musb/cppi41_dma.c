@@ -829,7 +829,7 @@ static unsigned cppi41_next_rx_segment(struct cppi41_channel *rx_ch)
 	u8 en_bd_intr = cppi->en_bd_intr;
 	u8 dma_mode, autoreq;
 	u8 rx_dma_mode = cppi->cppi_info->rx_dma_mode;
-
+	u8 sched_tbl_ctrl = cppi->cppi_info->sched_tbl_ctrl;
 
 	pkt_len = rx_ch->length;
 	/*
@@ -977,8 +977,9 @@ sched:
 	}
 
 	/* enable schedular if not enabled */
-	if (is_peripheral_active(cppi->musb) && (n_bd > 0))
-		cppi41_schedtbl_add_dma_ch(0, 0, rx_ch->ch_num, 0);
+	if (sched_tbl_ctrl && is_peripheral_active(cppi->musb) && (n_bd > 0))
+		cppi41_schedtbl_add_dma_ch(0, 0,
+			cppi->cppi_info->ep_dma_ch[rx_ch->ch_num], 0);
 	return 1;
 }
 
@@ -1797,6 +1798,7 @@ static void usb_process_rx_bd(struct cppi41 *cppi,
 	u8 ch_num, ep_num;
 	struct musb *musb = cppi->musb;
 	u32 length = 0, orig_buf_len;
+	u8 sched_tbl_ctrl = cppi->cppi_info->sched_tbl_ctrl;
 
 	/* Extract the data from received packet descriptor */
 	length = curr_pd->hw_desc.desc_info & CPPI41_PKT_LEN_MASK;
@@ -1819,9 +1821,10 @@ static void usb_process_rx_bd(struct cppi41 *cppi,
 	if (curr_pd->eop) {
 		curr_pd->eop = 0;
 		/* disable the rx dma schedular */
-		if (is_peripheral_active(cppi->musb) &&
+		if (sched_tbl_ctrl && is_peripheral_active(cppi->musb) &&
 			!cppi->cppi_info->rx_inf_mode)
-			cppi41_schedtbl_remove_dma_ch(0, 0, ch_num, 0);
+			cppi41_schedtbl_remove_dma_ch(0, 0,
+				cppi->cppi_info->ep_dma_ch[ch_num], 0);
 	}
 
 	/*

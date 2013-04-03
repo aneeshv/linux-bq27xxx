@@ -46,6 +46,7 @@ struct usb_cppi41_info {
 	u8 bd_intr_ctrl;
 	u8 rx_dma_mode;
 	u8 rx_inf_mode;
+	u8 sched_tbl_ctrl;
 	u32 version;
 };
 
