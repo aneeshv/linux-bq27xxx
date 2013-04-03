@@ -163,7 +163,7 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 			wake_up_interruptible(&adc_dev->wq_data_avail);
 		}
 		adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
-				(status | TSCADC_IRQENB_FIFO1THRES));
+				TSCADC_IRQENB_FIFO1THRES);
 		return IRQ_HANDLED;
 	} else if ((status & TSCADC_IRQENB_FIFO1OVRRUN) ||
 			(status & TSCADC_IRQENB_FIFO1UNDRFLW)) {
@@ -171,12 +171,9 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 		config &= ~(TSCADC_CNTRLREG_TSCSSENB);
 		adc_writel(adc_dev, TSCADC_REG_CTRL, config);
 
-		if (status & TSCADC_IRQENB_FIFO1UNDRFLW)
-			adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
-			(status | TSCADC_IRQENB_FIFO1UNDRFLW));
-		else
-			adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
-				(status | TSCADC_IRQENB_FIFO1OVRRUN));
+		adc_writel(adc_dev, TSCADC_REG_IRQSTATUS,
+				TSCADC_IRQENB_FIFO1OVRRUN |
+				TSCADC_IRQENB_FIFO1UNDRFLW);
 
 		adc_writel(adc_dev, TSCADC_REG_CTRL,
 			(config | TSCADC_CNTRLREG_TSCSSENB));
