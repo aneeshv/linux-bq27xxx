@@ -192,7 +192,7 @@ static void tiadc_poll_handler(struct work_struct *work_s)
 		container_of(work_s, struct adc_device, poll_work);
 	struct iio_dev *idev = iio_priv_to_dev(adc_dev);
 	struct iio_buffer *buffer = idev->buffer;
-	unsigned int fifo1count, readx1, status;
+	unsigned int fifo1count, readx1;
 	int i;
 	u32 *iBuf;
 
@@ -216,9 +216,8 @@ static void tiadc_poll_handler(struct work_struct *work_s)
 	}
 
 	buffer->access->store_to(buffer, (u8 *) iBuf, iio_get_time_ns());
-	status = adc_readl(adc_dev, TSCADC_REG_IRQENABLE);
 	adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
-			(status | TSCADC_IRQENB_FIFO1THRES));
+				TSCADC_IRQENB_FIFO1THRES);
 
 	kfree(iBuf);
 }
@@ -235,7 +234,7 @@ static int tiadc_buffer_postenable(struct iio_dev *idev)
 {
 	struct adc_device *adc_dev = iio_priv(idev);
 	struct iio_buffer *buffer = idev->buffer;
-	unsigned int enb, status, fifo1count;
+	unsigned int enb, fifo1count;
 	int stepnum, i;
 	u8 bit;
 
@@ -243,9 +242,8 @@ static int tiadc_buffer_postenable(struct iio_dev *idev)
 		pr_info("Data cannot be read continuously in one shot mode\n");
 		return -EINVAL;
 	} else {
-		status = adc_readl(adc_dev, TSCADC_REG_IRQENABLE);
 		adc_writel(adc_dev, TSCADC_REG_IRQENABLE,
-				(status | TSCADC_IRQENB_FIFO1THRES |
+				(TSCADC_IRQENB_FIFO1THRES |
 				 TSCADC_IRQENB_FIFO1OVRRUN |
 				 TSCADC_IRQENB_FIFO1UNDRFLW));
 
