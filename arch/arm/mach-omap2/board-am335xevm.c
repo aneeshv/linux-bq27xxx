@@ -2617,6 +2617,12 @@ static void i2c2_init(int evm_id, int profile)
 	return;
 }
 
+/* BeagleBone Black HDMI Audio */
+static struct platform_device am335x_hdmi_codec_device = {
+	.name		= "hdmi-audio-codec",
+	.id		= -1,
+};
+
 /* Setup McASP 0*/
 static void mcasp0_init(int evm_id, int profile)
 {
@@ -2631,6 +2637,7 @@ static void mcasp0_init(int evm_id, int profile)
 		gpio_direction_output(GPIO_TO_PIN(1, 27), 1);
 		setup_pin_mux(bone_black_mcasp0_pin_mux);
 		am335x_register_mcasp(&bone_black_snd_data0, 0);
+		platform_device_register(&am335x_hdmi_codec_device);
 		break;
 	default:
 		setup_pin_mux(mcasp0_pin_mux);

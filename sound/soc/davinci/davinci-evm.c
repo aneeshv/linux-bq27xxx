@@ -133,6 +133,30 @@ static int am335xevm_wl1271bt_pcm_hw_params(struct snd_pcm_substream *substream,
 
 	return 0;
 }
+
+static int am335xevm_hdmi_pcm_hw_params(struct snd_pcm_substream *substream,
+				struct snd_pcm_hw_params *params)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	int ret;
+	unsigned sysclk;
+
+	/* Set cpu DAI configuration for AM335X HDMI codec */
+	ret = snd_soc_dai_set_fmt(cpu_dai,
+			SND_SOC_DAIFMT_DSP_B |
+			SND_SOC_DAIFMT_NB_NF |
+			SND_SOC_DAIFMT_CBS_CFS);
+	if (ret < 0) {
+		printk(KERN_ERR "Can't set dai  configuration for "\
+				"AM335X HDMI codec\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 static struct snd_soc_ops am335xevm_wl1271bt_pcm_ops = {
 	.hw_params = am335xevm_wl1271bt_pcm_hw_params,
 };
@@ -144,6 +168,9 @@ static struct snd_soc_ops evm_spdif_ops = {
 		.hw_params = evm_spdif_hw_params,
 };
 
+static struct snd_soc_ops am335xevm_hdmi_pcm_ops = {
+	.hw_params = am335xevm_hdmi_pcm_hw_params,
+};
 /* davinci-evm machine dapm widgets */
 static const struct snd_soc_dapm_widget aic3x_dapm_widgets[] = {
 	SND_SOC_DAPM_HP("Headphone Jack", NULL),
@@ -309,6 +336,19 @@ static struct snd_soc_dai_link am335x_evm_dai[] = {
 	},
 };
 
+static struct snd_soc_dai_link am335x_bone_dai[] = {
+	{
+		.name = "AM335X_HDMI",
+		.stream_name = "HDMI",
+		.cpu_dai_name = "davinci-mcasp.0",
+		.codec_dai_name = "am335x-hdmi-hifi",
+		.platform_name = "davinci-pcm-audio",
+		.codec_name = "hdmi-audio-codec",
+		.ops = &am335xevm_hdmi_pcm_ops,
+	},
+};
+
+
 static struct snd_soc_dai_link am335x_evm_sk_dai = {
 	.name = "TLV320AIC3X",
 	.stream_name = "AIC3X",
@@ -366,6 +406,12 @@ static struct snd_soc_card am335x_snd_soc_card = {
 	.num_links =ARRAY_SIZE(am335x_evm_dai),
 };
 
+static struct snd_soc_card am335x_bone_snd_soc_card = {
+	.name = "AM335X BONE",
+	.dai_link = am335x_bone_dai,
+	.num_links =ARRAY_SIZE(am335x_bone_dai),
+};
+
 static struct snd_soc_card am335x_evm_sk_snd_soc_card = {
 	.name = "AM335X EVM",
 	.dai_link = &am335x_evm_sk_dai,
@@ -403,6 +449,8 @@ static int __init evm_init(void)
 #ifdef CONFIG_MACH_AM335XEVM
 		if (am335x_evm_get_id() == EVM_SK)
 			evm_snd_dev_data = &am335x_evm_sk_snd_soc_card;
+		else if (am335x_evm_get_id() == BEAGLE_BONE_BLACK)
+			evm_snd_dev_data = &am335x_bone_snd_soc_card;
 #endif
 		index = 0;
 	} else
