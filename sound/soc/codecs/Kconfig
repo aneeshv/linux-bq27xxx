@@ -25,6 +25,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_AK4641 if I2C
 	select SND_SOC_AK4642 if I2C
 	select SND_SOC_AK4671 if I2C
+	select SND_SOC_AM335X_HDMI_CODEC
 	select SND_SOC_ALC5623 if I2C
 	select SND_SOC_CQ0093VC if MFD_DAVINCI_VOICECODEC
 	select SND_SOC_CS42L51 if I2C
@@ -166,6 +167,9 @@ config SND_SOC_AK4642
 
 config SND_SOC_AK4671
 	tristate
+
+config SND_SOC_AM335X_HDMI_CODEC
+	tristate "AM335X HDMI Audio Codec support"
 
 config SND_SOC_ALC5623
        tristate
