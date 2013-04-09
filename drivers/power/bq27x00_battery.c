@@ -119,8 +119,7 @@ static enum power_supply_property bq27x00_battery_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
-	POWER_SUPPLY_PROP_ENERGY_NOW,
-	POWER_SUPPLY_PROP_SERIAL_NUMBER
+	POWER_SUPPLY_PROP_ENERGY_NOW
 };
 
 static unsigned int poll_interval = 360;
@@ -443,7 +442,6 @@ static int bq27x00_simple_value(int value,
 #define to_bq27x00_device_info(x) container_of((x), \
 				struct bq27x00_device_info, bat);
 
-static char serial_number[10];
 static int bq27x00_battery_get_property(struct power_supply *psy,
 					enum power_supply_property psp,
 					union power_supply_propval *val)
@@ -506,10 +504,6 @@ static int bq27x00_battery_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_ENERGY_NOW:
 		ret = bq27x00_battery_energy(di, val);
-		break;
-	case POWER_SUPPLY_PROP_SERIAL_NUMBER:
-		sprintf(serial_number, "%d", di->fw_ver);
-		val->strval = serial_number;
 		break;
 	default:
 		return -EINVAL;
@@ -647,6 +641,73 @@ static int bq27x00_battery_read_fw_version(struct bq27x00_device_info *di)
 
 	return bq27x00_read_i2c(di, 0x00, false);
 }
+
+static int bq27x00_battery_read_device_type(struct bq27x00_device_info *di)
+{
+	bq27x00_write_i2c(di, 0x00, 0x0001, false);
+
+	msleep(10);
+
+	return bq27x00_read_i2c(di, 0x00, false);
+}
+
+static int bq27x00_battery_read_dataflash_version(struct bq27x00_device_info *di)
+{
+	bq27x00_write_i2c(di, 0x00, 0x001f, false);
+
+	msleep(10);
+
+	return bq27x00_read_i2c(di, 0x00, false);
+}
+
+static ssize_t show_firmware_version(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+	int ver;
+
+	ver = bq27x00_battery_read_fw_version(di);
+
+	return sprintf(buf, "%d\n", ver);
+}
+
+static ssize_t show_dataflash_version(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+	int ver;
+
+	ver = bq27x00_battery_read_dataflash_version(di);
+
+	return sprintf(buf, "%d\n", ver);
+}
+
+static ssize_t show_device_type(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+	int dev_type;
+
+	dev_type = bq27x00_battery_read_device_type(di);
+
+	return sprintf(buf, "%d\n", dev_type);
+}
+
+
+static DEVICE_ATTR(fw_version, S_IRUGO, show_firmware_version, NULL);
+static DEVICE_ATTR(df_version, S_IRUGO, show_dataflash_version, NULL);
+static DEVICE_ATTR(device_type, S_IRUGO, show_device_type, NULL);
+
+static struct attribute *bq27x00_attributes[] = {
+	&dev_attr_fw_version.attr,
+	&dev_attr_df_version.attr,
+	&dev_attr_device_type.attr,
+	NULL
+};
+
+static const struct attribute_group bq27x00_attr_group = {
+	.attrs = bq27x00_attributes,
+};
 
 static int bq27x00_battery_probe(struct i2c_client *client,
 				 const struct i2c_device_id *id)
