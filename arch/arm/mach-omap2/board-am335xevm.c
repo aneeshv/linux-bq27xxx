@@ -2783,6 +2783,7 @@ static void mmc0_init(int evm_id, int profile)
 	case BEAGLE_BONE_A3:
 	case BEAGLE_BONE_OLD:
 	case EVM_SK:
+	case BEAGLE_BONE_BLACK:
 		setup_pin_mux(mmc0_common_pin_mux);
 		setup_pin_mux(mmc0_cd_only_pin_mux);
 		break;
@@ -3033,6 +3034,7 @@ static void am335x_rtc_init(int evm_id, int profile)
 	switch (evm_id) {
 	case BEAGLE_BONE_A3:
 	case BEAGLE_BONE_OLD:
+	case BEAGLE_BONE_BLACK:
 		am335x_rtc_info.pm_off = true;
 		break;
 	default:
@@ -3157,6 +3159,18 @@ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 	{NULL, 0, 0},
 };
 
+/* Beaglebone Black */
+static struct evm_dev_cfg beaglebone_black_dev_cfg[] = {
+	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_NONE},
+	{clkout2_enable, DEV_ON_BASEBOARD, PROFILE_NONE},
+	{tps65217_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{mii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{i2c2_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{NULL, 0, 0},
+};
 /* EVM - Starter Kit */
 static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_ALL},
@@ -3257,6 +3271,22 @@ static void setup_beaglebone(void)
 	am335x_mmc[0].gpio_wp = -EINVAL;
 
 	_configure_device(BEAGLE_BONE_A3, beaglebone_dev_cfg, PROFILE_NONE);
+
+	/* TPS65217 regulator has full constraints */
+	regulator_has_full_constraints();
+
+	am33xx_cpsw_init(AM33XX_CPSW_MODE_MII, NULL, NULL);
+}
+
+/* BeagleBone Black */
+static void setup_beaglebone_black(void)
+{
+	pr_info("The board is a AM335x Beaglebone Black.\n");
+
+	/* Beagle Bone has Micro-SD slot which doesn't have Write Protect pin */
+	am335x_mmc[0].gpio_wp = -EINVAL;
+
+	_configure_device(BEAGLE_BONE_BLACK, beaglebone_black_dev_cfg, PROFILE_NONE);
 
 	/* TPS65217 regulator has full constraints */
 	regulator_has_full_constraints();
@@ -3471,6 +3501,9 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 			setup_beaglebone_old();
 		else
 			setup_beaglebone();
+	} else if (!strncmp("A335BNLT", config.name, 8)) {
+		daughter_brd_detected = false;
+		setup_beaglebone_black();
 	} else if (!strncmp("A335X_SK", config.name, 8)) {
 		daughter_brd_detected = false;
 		setup_starterkit();
