@@ -258,6 +258,12 @@ struct da8xx_lcdc_platform_data dvi_pdata = {
 	.type      = "1024x768@60",
 };
 
+struct da8xx_lcdc_platform_data hdmi_pdata = {
+	.manu_name    = "NXP HDMI",
+	.controller_data  = &dvi_cfg,
+	.type      = "nxp-1280x720@60",
+};
+
 /* Touchscreen Controller Data for AM335xEVM */
 /* Calibrated on AM335xEVM Rev. 1.1A and 1.2A */
 /* The values have to be fine tuned for other revisions, if requred */
@@ -683,6 +689,48 @@ static struct pinmux_config lcdc_pin_mux[] = {
 	{"lcd_hsync.lcd_hsync",		OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT},
 	{"lcd_pclk.lcd_pclk",		OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT},
 	{"lcd_ac_bias_en.lcd_ac_bias_en", OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT},
+	{NULL, 0},
+};
+
+/* Module pin mux for HDMI board */
+static struct pinmux_config hdmi_pin_mux[] = {
+	{"lcd_data0.lcd_data0",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data1.lcd_data1",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data2.lcd_data2",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data3.lcd_data3",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data4.lcd_data4",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data5.lcd_data5",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data6.lcd_data6",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data7.lcd_data7",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data8.lcd_data8",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data9.lcd_data9",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data10.lcd_data10",  OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data11.lcd_data11",  OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data12.lcd_data12",  OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data13.lcd_data13",  OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data14.lcd_data14",  OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_data15.lcd_data15",  OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT
+		| AM33XX_PULL_DISA},
+	{"lcd_vsync.lcd_vsync",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT},
+	{"lcd_hsync.lcd_hsync",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT},
+	{"lcd_pclk.lcd_pclk",      OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT},
+	{"lcd_ac_bias_en.lcd_ac_bias_en", OMAP_MUX_MODE0
+		| AM33XX_PIN_OUTPUT}, /*DVIEN*/
 	{NULL, 0},
 };
 
@@ -1728,6 +1776,51 @@ static void bone_lcd4_lcdc_init(int evm_id, int profile)
 
 	if (am33xx_register_lcdc(&NHD_480272MF_ATXI_bone_lcd_cape_pdata))
 		pr_info("Failed to register Beagleboardtoys 4.3\" LCD cape device\n");
+
+	return;
+}
+
+static struct i2c_board_info tda99X_i2c_boardinfo[] = {
+	{
+		I2C_BOARD_INFO("tda998x",  0x70),
+	},
+};
+
+static void hdmi_init(int evm_id, int profile)
+{
+	struct i2c_adapter *adapter;
+	struct i2c_client *client;
+	unsigned int i2c_instance;
+
+	setup_pin_mux(hdmi_pin_mux);
+
+	if (conf_disp_pll(371000000)) {
+		pr_info("Failed to set pixclock to 371000000, not attempting to"
+				"register DVI adapter\n");
+		return;
+	}
+
+	if (am33xx_register_lcdc(&hdmi_pdata))
+		pr_info("Failed to register BeagleBoardToys HDMI adapter\n");
+
+
+	if(evm_id == BEAGLE_BONE_BLACK)
+		i2c_instance = 1;
+
+	/* I2C adapter request */
+	adapter = i2c_get_adapter(i2c_instance);
+	if (!adapter) {
+		pr_err("Failed to get adapter i2c%u\n", i2c_instance);
+		return;
+	}
+
+	client = i2c_new_device(adapter, tda99X_i2c_boardinfo);
+	if (!client)
+		pr_err("Failed to register HDMI tda998x to i2c%u\n", i2c_instance);
+
+	i2c_put_adapter(adapter);
+
+	pr_info("Setup HDMI display complete\n");
 
 	return;
 }
@@ -3447,7 +3540,12 @@ static void bone_setup_display_daughter_board(struct memory_accessor *m, void *c
 	 * to enable framebuffer driver which is needed for successful Android bootup
 	 */
 	pr_info("No daughter card found on BeagleBone\n");
-	vnc_lcdc_init(DEV_ON_BASEBOARD, PROFILE_NONE);
+
+	/* HDMI display is setup for BeagleBone Black */
+	if (am335x_evm_get_id() == BEAGLE_BONE_BLACK)
+		hdmi_init(DEV_ON_BASEBOARD, PROFILE_NONE);
+	else
+		vnc_lcdc_init(DEV_ON_BASEBOARD, PROFILE_NONE);
 }
 
 static void bone_setup_daughter_board(struct memory_accessor *m, void *c)
