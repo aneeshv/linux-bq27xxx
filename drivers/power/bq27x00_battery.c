@@ -42,6 +42,13 @@
 #define G3_FW_VERSION			0x0324
 #define L1_FW_VERSION			0x0600
 
+#define CONTROL_CMD			0x00
+/* Subcommands of Control() */
+#define DEV_TYPE_SUBCMD			0x0001
+#define FW_VER_SUBCMD			0x0002
+#define DF_VER_SUBCMD			0x001F
+#define RESET_SUBCMD			0x0041
+
 #define INVALID_REG_ADDR		0xFF
 
 enum bq27x00_reg_index {
@@ -184,6 +191,7 @@ struct bq27x00_device_info {
 
 	u8 *regs;
 	int fw_ver;
+	int df_ver;
 };
 
 static enum power_supply_property bq27x00_battery_props[] = {
@@ -732,31 +740,43 @@ static int bq27x00_write_i2c(struct bq27x00_device_info *di, u8 reg, int value, 
 	return 0;
 }
 
-static int bq27x00_battery_read_fw_version(struct bq27x00_device_info *di)
+static int bq27x00_battery_reset(struct bq27x00_device_info *di)
 {
-	bq27x00_write_i2c(di, 0x00, 0x0002, false);
+	dev_info(di->dev, "Gas Gauge Reset\n");
+
+	bq27x00_write_i2c(di, CONTROL_CMD, RESET_SUBCMD, false);
 
 	msleep(10);
 
-	return bq27x00_read_i2c(di, 0x00, false);
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
+}
+
+
+static int bq27x00_battery_read_fw_version(struct bq27x00_device_info *di)
+{
+	bq27x00_write_i2c(di, CONTROL_CMD, FW_VER_SUBCMD, false);
+
+	msleep(10);
+
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
 }
 
 static int bq27x00_battery_read_device_type(struct bq27x00_device_info *di)
 {
-	bq27x00_write_i2c(di, 0x00, 0x0001, false);
+	bq27x00_write_i2c(di, CONTROL_CMD, DEV_TYPE_SUBCMD, false);
 
 	msleep(10);
 
-	return bq27x00_read_i2c(di, 0x00, false);
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
 }
 
 static int bq27x00_battery_read_dataflash_version(struct bq27x00_device_info *di)
 {
-	bq27x00_write_i2c(di, 0x00, 0x001f, false);
+	bq27x00_write_i2c(di, CONTROL_CMD, DF_VER_SUBCMD, false);
 
 	msleep(10);
 
-	return bq27x00_read_i2c(di, 0x00, false);
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
 }
 
 static ssize_t show_firmware_version(struct device *dev,
@@ -792,15 +812,26 @@ static ssize_t show_device_type(struct device *dev,
 	return sprintf(buf, "%d\n", dev_type);
 }
 
+static ssize_t show_reset(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+
+	bq27x00_battery_reset(di);
+
+	return sprintf(buf, "okay\n");
+}
 
 static DEVICE_ATTR(fw_version, S_IRUGO, show_firmware_version, NULL);
 static DEVICE_ATTR(df_version, S_IRUGO, show_dataflash_version, NULL);
 static DEVICE_ATTR(device_type, S_IRUGO, show_device_type, NULL);
+static DEVICE_ATTR(reset, S_IRUGO, show_reset, NULL);
 
 static struct attribute *bq27x00_attributes[] = {
 	&dev_attr_fw_version.attr,
 	&dev_attr_df_version.attr,
 	&dev_attr_device_type.attr,
+	&dev_attr_reset.attr,
 	NULL
 };
 
@@ -849,7 +880,10 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 
 	/* Get the fw version to determine the register mapping */
 	di->fw_ver = bq27x00_battery_read_fw_version(di);
-	dev_info(&client->dev, "Gas Guage fw version is 0x%04x\n", di->fw_ver);
+	di->df_ver = bq27x00_battery_read_dataflash_version(di);
+	dev_info(&client->dev,
+		"Gas Guage fw version 0x%04x; df version 0x%04x\n",
+		di->fw_ver, di->df_ver);
 
 	if (di->chip == BQ27421)
 		di->regs = bq27421_regs;
@@ -867,6 +901,9 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 		goto batt_failed_3;
 
 	i2c_set_clientdata(client, di);
+	retval = sysfs_create_group(&client->dev.kobj, &bq27x00_attr_group);
+	if (retval)
+		dev_err(&client->dev, "could not create sysfs files\n");
 
 	return 0;
 
