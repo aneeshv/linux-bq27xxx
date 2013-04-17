@@ -389,6 +389,20 @@ static struct snd_platform_data am335x_evm_sk_snd_data0 = {
     .version    = MCASP_VERSION_3,
     .txnumevt   = 1,
 };
+
+static struct snd_platform_data bone_black_snd_data0 = {
+	.tx_dma_offset	= 0x46000000,	/* McASP0*/
+	.rx_dma_offset	= 0x46000000,
+	.op_mode	= DAVINCI_MCASP_IIS_MODE,
+	.num_serializer	= ARRAY_SIZE(am335x_iis_serializer_direction1),
+	.tdm_slots	= 2,
+	.serial_dir	= am335x_iis_serializer_direction1,
+	.asp_chan_q	= EVENTQ_2,
+	.version	= MCASP_VERSION_3,
+	.txnumevt	= 1,
+	.rxnumevt	= 1,
+};
+
 static struct omap2_hsmmc_info am335x_mmc[] __initdata = {
 	{
 		.mmc            = 1,
@@ -974,6 +988,19 @@ static struct pinmux_config mcasp0_pin_mux[] = {
     {NULL, 0},
 };
 
+/* Module pin mux for BeagleBone Black mcasp0 and hdmi */
+static struct pinmux_config bone_black_mcasp0_pin_mux[] = {
+	{"mcasp0_aclkx.mcasp0_aclkx", OMAP_MUX_MODE0 |AM33XX_PIN_OUTPUT},
+	{"mcasp0_fsx.mcasp0_fsx", OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT},
+	{"mcasp0_ahclkr.mcasp0_axr2", OMAP_MUX_MODE2 | AM33XX_PIN_OUTPUT},
+	/* Same pin is used for rx, but for hdmi we don't need rx */
+	{"mcasp0_ahclkx.mcasp0_ahclkx", OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
+	{"spi0_d1.i2c1_sda",    OMAP_MUX_MODE2 | AM33XX_SLEWCTRL_SLOW |
+					AM33XX_PULL_ENBL | AM33XX_INPUT_EN},
+	{"spi0_cs0.i2c1_scl",   OMAP_MUX_MODE2 | AM33XX_SLEWCTRL_SLOW |
+					AM33XX_PULL_ENBL | AM33XX_INPUT_EN},
+	{NULL, 0},
+};
 
 /* Module pin mux for mmc0 */
 static struct pinmux_config mmc0_common_pin_mux[] = {
@@ -2590,20 +2617,27 @@ static void i2c2_init(int evm_id, int profile)
 	return;
 }
 
-/* Setup McASP 1 */
+/* Setup McASP 0*/
 static void mcasp0_init(int evm_id, int profile)
 {
-    /* Configure McASP */
-    setup_pin_mux(mcasp0_pin_mux);
-    switch (evm_id) {
-    case EVM_SK:
-        am335x_register_mcasp(&am335x_evm_sk_snd_data0, 0);
-        break;
-    default:
-        am335x_register_mcasp(&am335x_evm_snd_data0, 0);
-    }
+	/* Configure McASP */
+	switch (evm_id) {
+	case EVM_SK:
+		setup_pin_mux(mcasp0_pin_mux);
+		am335x_register_mcasp(&am335x_evm_sk_snd_data0, 0);
+		break;
+	case BEAGLE_BONE_BLACK:
+		gpio_request(GPIO_TO_PIN(1, 27), "BONE_AUDIO_CLOCK");
+		gpio_direction_output(GPIO_TO_PIN(1, 27), 1);
+		setup_pin_mux(bone_black_mcasp0_pin_mux);
+		am335x_register_mcasp(&bone_black_snd_data0, 0);
+		break;
+	default:
+		setup_pin_mux(mcasp0_pin_mux);
+		am335x_register_mcasp(&am335x_evm_snd_data0, 0);
+	}
 
-    return;
+	return;
 }
 
 /* Setup McASP 1 */
@@ -3278,6 +3312,7 @@ static struct evm_dev_cfg beaglebone_black_dev_cfg[] = {
 	{mmc1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{i2c2_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{mcasp0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{NULL, 0, 0},
 };
 /* EVM - Starter Kit */
