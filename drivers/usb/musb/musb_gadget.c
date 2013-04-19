@@ -948,9 +948,6 @@ void musb_g_rx(struct musb *musb, u8 epnum)
 	}
 
 	if (dma && (csr & MUSB_RXCSR_DMAENAB)) {
-		csr &= ~(MUSB_RXCSR_AUTOCLEAR
-				| MUSB_RXCSR_DMAENAB
-				| MUSB_RXCSR_DMAMODE);
 		musb_writew(epio, MUSB_RXCSR,
 			MUSB_RXCSR_P_WZC_BITS | csr);
 
