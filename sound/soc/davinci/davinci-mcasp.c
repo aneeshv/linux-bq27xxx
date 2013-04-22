@@ -502,11 +502,26 @@ static int davinci_mcasp_set_sysclk(struct snd_soc_dai *dai, int clk_id,
 				unsigned int freq, int dir)
 {
 		struct davinci_audio_dev *dev = snd_soc_dai_get_drvdata(dai);
-
 		if (dir == SND_SOC_CLOCK_OUT) {
-				mcasp_set_bits(dev->base + DAVINCI_MCASP_AHCLKXCTL_REG, AHCLKXE);
-				mcasp_set_bits(dev->base + DAVINCI_MCASP_AHCLKRCTL_REG, AHCLKRE);
-				mcasp_set_bits(dev->base + DAVINCI_MCASP_PDIR_REG, AHCLKX);
+			switch(clk_id) {
+				case DAVINCI_CLK_AHCLKX:
+					mcasp_clr_bits(dev->base + DAVINCI_MCASP_AHCLKXCTL_REG, AHCLKXE);
+/*
+					mcasp_set_bits(base + DAVINCI_MCASP_PFUNC_REG,
+						 AHCLKX);
+					mcasp_set_bits(base + DAVINCI_MCASP_PFUNC_REG,
+						ACLKX | AFSX);
+*/
+					mcasp_clr_bits(dev->base + DAVINCI_MCASP_PDIR_REG,
+						AHCLKX);
+					mcasp_set_bits(dev->base + DAVINCI_MCASP_PDIR_REG,
+						ACLKX | AFSX);
+					break;
+				default:
+					mcasp_set_bits(dev->base + DAVINCI_MCASP_AHCLKXCTL_REG, AHCLKXE);
+					mcasp_set_bits(dev->base + DAVINCI_MCASP_AHCLKRCTL_REG, AHCLKRE);
+					mcasp_set_bits(dev->base + DAVINCI_MCASP_PDIR_REG, AHCLKX);
+			}
 		} else {
 				mcasp_clr_bits(dev->base + DAVINCI_MCASP_AHCLKXCTL_REG, AHCLKXE);
 				mcasp_clr_bits(dev->base + DAVINCI_MCASP_AHCLKRCTL_REG, AHCLKRE);

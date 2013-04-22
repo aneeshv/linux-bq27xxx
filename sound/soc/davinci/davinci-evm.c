@@ -118,7 +118,7 @@ static int am335xevm_wl1271bt_pcm_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	/* set the codec system clock */
-	ret = snd_soc_dai_set_sysclk(cpu_dai, 0, sysclk, SND_SOC_CLOCK_OUT);
+	ret = snd_soc_dai_set_sysclk(cpu_dai, DAVINCI_CLK_AUX, sysclk, SND_SOC_CLOCK_OUT);
 	if (ret < 0) {
 		printk(KERN_ERR "Can't set sysclk  configuration \n");
 		return ret;
@@ -151,6 +151,20 @@ static int am335xevm_hdmi_pcm_hw_params(struct snd_pcm_substream *substream,
 	if (ret < 0) {
 		printk(KERN_ERR "Can't set dai  configuration for "\
 				"AM335X HDMI codec\n");
+		return ret;
+	}
+
+	/* set the codec system clock */
+	ret = snd_soc_dai_set_sysclk(cpu_dai, DAVINCI_CLK_AHCLKX, sysclk, SND_SOC_CLOCK_OUT);
+	if (ret < 0) {
+		printk(KERN_ERR "Can't set sysclk  configuration \n");
+		return ret;
+	}
+
+	/* set the codec system clock */
+	ret = snd_soc_dai_set_clkdiv(cpu_dai, 1,17);
+	if (ret < 0) {
+		printk(KERN_ERR "Can't set sysclk  divider configuration \n");
 		return ret;
 	}
 
