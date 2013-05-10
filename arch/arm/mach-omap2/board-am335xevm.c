@@ -2530,17 +2530,31 @@ static void mcasp1_init(int evm_id, int profile)
 
 static void mmc1_init(int evm_id, int profile)
 {
-	setup_pin_mux(mmc1_common_pin_mux);
-	setup_pin_mux(mmc1_dat4_7_pin_mux);
-	setup_pin_mux(mmc1_wp_only_pin_mux);
-	setup_pin_mux(mmc1_cd_only_pin_mux);
+	switch (evm_id) {
+	case BEAGLE_BONE_BLACK:
+		setup_pin_mux(mmc1_common_pin_mux);
+		setup_pin_mux(mmc1_dat4_7_pin_mux);
 
-	am335x_mmc[1].mmc = 2;
-	am335x_mmc[1].caps = MMC_CAP_4_BIT_DATA;
-	am335x_mmc[1].gpio_cd = GPIO_TO_PIN(2, 2);
-	am335x_mmc[1].gpio_wp = GPIO_TO_PIN(1, 29);
-	am335x_mmc[1].ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */
+		am335x_mmc[1].mmc		= 2;
+		am335x_mmc[1].caps		= MMC_CAP_4_BIT_DATA | MMC_CAP_8_BIT_DATA;
+		am335x_mmc[1].nonremovable	= true;
+		am335x_mmc[1].gpio_cd		= -EINVAL;
+		am335x_mmc[1].gpio_wp		= -EINVAL;
+		am335x_mmc[1].ocr_mask		= MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */
+		break;
+	default:
+		setup_pin_mux(mmc1_common_pin_mux);
+		setup_pin_mux(mmc1_dat4_7_pin_mux);
+		setup_pin_mux(mmc1_wp_only_pin_mux);
+		setup_pin_mux(mmc1_cd_only_pin_mux);
 
+		am335x_mmc[1].mmc		= 2;
+		am335x_mmc[1].caps		= MMC_CAP_4_BIT_DATA;
+		am335x_mmc[1].gpio_cd		= GPIO_TO_PIN(2, 2);
+		am335x_mmc[1].gpio_wp		= GPIO_TO_PIN(1, 29);
+		am335x_mmc[1].ocr_mask		= MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */
+		break;
+	}
 	/* mmc will be initialized when mmc0_init is called */
 	return;
 }
@@ -3167,6 +3181,7 @@ static struct evm_dev_cfg beaglebone_black_dev_cfg[] = {
 	{mii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{mmc1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{i2c2_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{NULL, 0, 0},
