@@ -348,6 +348,7 @@ static struct snd_platform_data am335x_evm_snd_data0 = {
     .version    = MCASP_VERSION_3,
     .txnumevt   = 1,
     .rxnumevt   = 1,
+    .sync_mode  = 1,
 };
 
 static u8 am335x_evm_sk_iis_serializer_direction1[] = {

@@ -55,7 +55,7 @@ struct davinci_audio_dev {
 	/* McASP FIFO related */
 	u8	txnumevt;
 	u8	rxnumevt;
-
+	int	sync_mode;
 	/* backup related */
 	unsigned int *xrsrctl;
 	unsigned int pfunc;

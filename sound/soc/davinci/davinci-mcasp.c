@@ -341,17 +341,17 @@ static inline void mcasp_set_ctl_reg(void __iomem *regs, u32 val)
 
 static void mcasp_start_rx(struct davinci_audio_dev *dev)
 {
-#if 1
-	/* if rx would like to use FSX instead FSR
-	* tx engine should be enable
-	*/
 
-	mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG, TXHCLKRST);
-	mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG, TXCLKRST);
-	mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG, TXSERCLR);
-	mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG, TXFSRST);
-#endif
-
+	if ( dev->sync_mode == 1)
+	{
+		/* if rx would like to use FSX instead FSR
+		 * tx engine should be enable
+		 */
+		mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG, TXHCLKRST);
+		mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG, TXCLKRST);
+		mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG, TXSERCLR);
+		mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLX_REG, TXFSRST);
+	}
 
 	mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLR_REG, RXHCLKRST);
 	mcasp_set_ctl_reg(dev->base + DAVINCI_MCASP_GBLCTLR_REG, RXCLKRST);
@@ -393,7 +393,10 @@ static void mcasp_start_tx(struct davinci_audio_dev *dev)
 		cnt++;
 
 	mcasp_set_reg(dev->base + DAVINCI_MCASP_TXBUF_REG, 0);
-	msleep(50);
+	if (dev->sync_mode == 1)
+	{
+		msleep(50);
+	}
 }
 
 static void davinci_mcasp_start(struct davinci_audio_dev *dev, int stream)
@@ -401,7 +404,10 @@ static void davinci_mcasp_start(struct davinci_audio_dev *dev, int stream)
 	if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		if (dev->txnumevt) {	/* flush and enable FIFO */
 			if (dev->version == MCASP_VERSION_3) {
-				mcasp_stop_tx(dev);
+				if (dev->sync_mode == 1)
+				{
+					mcasp_stop_tx(dev);
+				}
 				mcasp_clr_bits(dev->base + MCASP_VER3_WFIFOCTL,
 								FIFO_ENABLE);
 				mcasp_set_bits(dev->base + MCASP_VER3_WFIFOCTL,
@@ -537,7 +543,6 @@ static int davinci_mcasp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
 				case SND_SOC_DAIFMT_CBS_CFS:
 		/* codec is clock and frame slave */
-		printk("%s:%s: %d\n", __FILE__,__FUNCTION__, __LINE__);
 		mcasp_set_bits(dev->base+DAVINCI_MCASP_RXFMT_REG, FSRDLY(1));
 
 		mcasp_set_bits(base + DAVINCI_MCASP_ACLKXCTL_REG, ACLKXE);
@@ -797,9 +802,12 @@ static void davinci_hw_param(struct davinci_audio_dev *dev, int stream)
 			mcasp_mod_bits(dev->base + DAVINCI_MCASP_RXFMCTL_REG,
 					FSRMOD(dev->tdm_slots), FSRMOD(0x1FF));
 
-			/*for ASYNC = 0 case*/
-			mcasp_mod_bits(dev->base + DAVINCI_MCASP_TXFMCTL_REG,
-					FSXMOD(dev->tdm_slots), FSXMOD(0x1FF));
+			if (dev->sync_mode == 0)
+			{
+				/*for ASYNC = 0 case*/
+				mcasp_mod_bits(dev->base + DAVINCI_MCASP_TXFMCTL_REG,
+						FSXMOD(dev->tdm_slots), FSXMOD(0x1FF));
+			}
 		}else
 			printk(KERN_ERR "capture tdm slot %d not supported\n",
 				dev->tdm_slots);
@@ -1048,6 +1056,7 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 	dev->version = pdata->version;
 	dev->txnumevt = pdata->txnumevt;
 	dev->rxnumevt = pdata->rxnumevt;
+	dev->sync_mode = pdata->sync_mode;
 	dev->dev	= &pdev->dev;
 
 	if (dev->version == MCASP_VERSION_3) {
