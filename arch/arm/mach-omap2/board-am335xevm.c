@@ -3539,7 +3539,7 @@ static void bone_setup_display_daughter_board(struct memory_accessor *m, void *c
 	/* Display needs to be initialized even if display daughter card is not found so as
 	 * to enable framebuffer driver which is needed for successful Android bootup
 	 */
-	pr_info("No daughter card found on BeagleBone\n");
+	pr_info("No display cape found on BeagleBone\n");
 
 	/* HDMI display is setup for BeagleBone Black */
 	if (am335x_evm_get_id() == BEAGLE_BONE_BLACK)
