@@ -165,3 +165,5 @@ obj-$(CONFIG_FB_VIRTUAL)          += vfb.o
 
 #video output switch sysfs driver
 obj-$(CONFIG_VIDEO_OUTPUT_CONTROL) += output.o
+# i2c based nxp tda998x driver
+obj-$(CONFIG_DRM_I2C_NXP_TDA998X)	+= nxp/
