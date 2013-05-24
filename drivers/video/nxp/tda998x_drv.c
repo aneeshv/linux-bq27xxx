@@ -690,40 +690,13 @@ tda998x_encoder_mode_set(struct i2c_client *client)
 
 	if (mode->flags & DRM_MODE_FLAG_NHSYNC)
 		reg_set(client, REG_VIP_CNTRL_3, VIP_CNTRL_3_H_TGL);
-	reg_write(client, REG_VIDFORMAT, 0x00);
-	reg_write16(client, REG_NPIX_MSB, mode->hdisplay - 1);
-	reg_write16(client, REG_NLINE_MSB, mode->vdisplay - 1);
-	reg_write16(client, REG_VS_LINE_STRT_1_MSB, line_start);
-	reg_write16(client, REG_VS_LINE_END_1_MSB, line_end);
-	reg_write16(client, REG_VS_PIX_STRT_1_MSB, hs_start);
-	reg_write16(client, REG_VS_PIX_END_1_MSB, hs_start);
-	reg_write16(client, REG_HS_PIX_START_MSB, hs_start);
-	reg_write16(client, REG_HS_PIX_STOP_MSB, hs_end);
-	reg_write16(client, REG_VWIN_START_1_MSB, vwin_start);
-	reg_write16(client, REG_VWIN_END_1_MSB, vwin_end);
-	reg_write16(client, REG_DE_START_MSB, de_start);
-	reg_write16(client, REG_DE_STOP_MSB, de_end);
-
-	/* let incoming pixels fill the active space (if any) */
-	reg_write(client, REG_ENABLE_SPACE, 0x01);
-
-	reg_write16(client, REG_REFPIX_MSB, ref_pix);
-	reg_write16(client, REG_REFLINE_MSB, ref_line);
-
-	reg = TBG_CNTRL_1_VHX_EXT_DE |
-			TBG_CNTRL_1_VHX_EXT_HS |
-			TBG_CNTRL_1_VHX_EXT_VS |
-			TBG_CNTRL_1_DWIN_DIS | /* HDCP off */
-			TBG_CNTRL_1_VH_TGL_2;
-	if (mode->flags & (DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC))
-		reg |= TBG_CNTRL_1_VH_TGL_0;
-	reg_set(client, REG_TBG_CNTRL_1, reg);
 
 	if(tda998x_is_monitor_hdmi(client) == 1) {
 		char vidformat;
 		vidformat = tda998x_cea_to_vidformat(drm_match_cea_mode(mode));
 		if(vidformat == (char)-1) {
 			dev_err(&client->dev, "Not sure which CEA mode to set, leaving as DVI");
+			reg_write(client, REG_VIDFORMAT, 0);
 			goto out;
 		}
 		dev_info(&client->dev, "Connected to an HDMI monitor with cea mode %d", vidformat);
@@ -735,13 +708,14 @@ tda998x_encoder_mode_set(struct i2c_client *client)
 			reg_write(client, REG_TBG_CNTRL_1, 0);
 
 		reg_write(client, REG_VIDFORMAT, vidformat);
-
 		/* get the infoframes pumping */
 		tda998x_avi_infoframe_enable(client, mode);
 		tda998x_audio_infoframe_enable(client);
 
-		reg_set(client, REG_TX33, TX33_HDMI);
-
+/*HDCP  HDCP mode is turned off since a violet vertical
+ * line appears at the left corner
+ *		reg_set(client, REG_TX33, TX33_HDMI);
+ */
 		/* set up audio registers */
 		reg_write(client, REG_ACR_CTS_0, 0x0);
 		reg_write(client, REG_ACR_CTS_1, 0x0);
@@ -778,6 +752,34 @@ tda998x_encoder_mode_set(struct i2c_client *client)
 	}
 
 out:
+	reg_write16(client, REG_NPIX_MSB, mode->hdisplay - 1);
+	reg_write16(client, REG_NLINE_MSB, mode->vdisplay - 1);
+	reg_write16(client, REG_VS_LINE_STRT_1_MSB, line_start);
+	reg_write16(client, REG_VS_LINE_END_1_MSB, line_end);
+	reg_write16(client, REG_VS_PIX_STRT_1_MSB, hs_start);
+	reg_write16(client, REG_VS_PIX_END_1_MSB, hs_start);
+	reg_write16(client, REG_HS_PIX_START_MSB, hs_start);
+	reg_write16(client, REG_HS_PIX_STOP_MSB, hs_end);
+	reg_write16(client, REG_VWIN_START_1_MSB, vwin_start);
+	reg_write16(client, REG_VWIN_END_1_MSB, vwin_end);
+	reg_write16(client, REG_DE_START_MSB, de_start);
+	reg_write16(client, REG_DE_STOP_MSB, de_end);
+
+	/* let incoming pixels fill the active space (if any) */
+	reg_write(client, REG_ENABLE_SPACE, 0x01);
+
+	reg_write16(client, REG_REFPIX_MSB, ref_pix);
+	reg_write16(client, REG_REFLINE_MSB, ref_line);
+
+	reg = TBG_CNTRL_1_VHX_EXT_DE |
+			TBG_CNTRL_1_VHX_EXT_HS |
+			TBG_CNTRL_1_VHX_EXT_VS |
+			TBG_CNTRL_1_DWIN_DIS | /* HDCP off */
+			TBG_CNTRL_1_VH_TGL_2;
+	if (mode->flags & (DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC))
+		reg |= TBG_CNTRL_1_VH_TGL_0;
+	reg_set(client, REG_TBG_CNTRL_1, reg);
+
 	/* must be last register set: */
 	reg_clear(client, REG_TBG_CNTRL_0, TBG_CNTRL_0_SYNC_ONCE);
 }
