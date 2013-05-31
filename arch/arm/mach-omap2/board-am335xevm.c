@@ -3468,7 +3468,9 @@ static void am335x_opp_update(void)
 	}
 }
 
+#ifdef CONFIG_MACH_AM335XEVM_VIBRATOR
 int am335xevm_vibrator_init(void);
+#endif
 
 static void setup_general_purpose_evm(void)
 {
@@ -3489,8 +3491,10 @@ static void setup_general_purpose_evm(void)
 	phy_register_fixup_for_uid(AM335X_EVM_PHY_ID, AM335X_EVM_PHY_MASK,
 				   am33xx_evm_tx_clk_dly_phy_fixup);
 
+#ifdef CONFIG_MACH_AM335XEVM_VIBRATOR
 	/* Initialize Vibrator on AM335xEVM */
 	am335xevm_vibrator_init();
+#endif
 }
 
 static void setup_ind_auto_motor_ctrl_evm(void)
