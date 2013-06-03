@@ -804,7 +804,7 @@ static void davinci_hw_param(struct davinci_audio_dev *dev, int stream)
 			printk(KERN_ERR "playback tdm slot %d not supported\n",
 				dev->tdm_slots);
 
-		mcasp_clr_bits(dev->base + DAVINCI_MCASP_TXFMCTL_REG, FSXDUR);
+		mcasp_set_bits(dev->base + DAVINCI_MCASP_TXFMCTL_REG, FSXDUR);
 	} else {
 		/* bit stream is MSB first with no delay */
 		/* DSP_B mode */
