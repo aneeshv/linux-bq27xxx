@@ -527,7 +527,7 @@ tda998x_audio_infoframe_enable(struct i2c_client *client)
 	/* NXP audio is fixed at these values for the time being */
 	audio_frame.channels = 2;
 	audio_frame.coding_type = HDMI_AUDIO_CODING_TYPE_PCM;
-	audio_frame.sample_size = HDMI_AUDIO_SAMPLE_SIZE_24;
+	audio_frame.sample_size = HDMI_AUDIO_SAMPLE_SIZE_16;
 	audio_frame.sample_frequency = HDMI_AUDIO_SAMPLE_FREQUENCY_48000;
 
 	len = hdmi_audio_infoframe_pack(&audio_frame, buffer, sizeof(buffer));
@@ -624,7 +624,7 @@ tda998x_encoder_mode_set(struct i2c_client *client)
 	ref_line = 2;
 
 	/* this might changes for other color formats from the CRTC: */
-	ref_pix = 3 + hs_start;
+	ref_pix = 0x2A + hs_start;
 
 	div = 148500 / mode->clock;
 
@@ -691,6 +691,32 @@ tda998x_encoder_mode_set(struct i2c_client *client)
 	if (mode->flags & DRM_MODE_FLAG_NHSYNC)
 		reg_set(client, REG_VIP_CNTRL_3, VIP_CNTRL_3_H_TGL);
 
+	reg_write16(client, REG_NPIX_MSB, mode->hdisplay - 1);
+	reg_write16(client, REG_NLINE_MSB, mode->vdisplay - 1);
+	reg_write16(client, REG_VS_LINE_STRT_1_MSB, line_start);
+	reg_write16(client, REG_VS_LINE_END_1_MSB, line_end);
+	reg_write16(client, REG_VS_PIX_STRT_1_MSB, hs_start);
+	reg_write16(client, REG_VS_PIX_END_1_MSB, hs_start);
+	reg_write16(client, REG_HS_PIX_START_MSB, hs_start);
+	reg_write16(client, REG_HS_PIX_STOP_MSB, hs_end);
+	reg_write16(client, REG_VWIN_START_1_MSB, vwin_start);
+	reg_write16(client, REG_VWIN_END_1_MSB, vwin_end);
+	reg_write16(client, REG_DE_START_MSB, de_start);
+	reg_write16(client, REG_DE_STOP_MSB, de_end);
+
+	/* let incoming pixels fill the active space (if any) */
+	reg_write(client, REG_ENABLE_SPACE, 0x01);
+	reg_write16(client, REG_REFPIX_MSB, ref_pix);
+	reg_write16(client, REG_REFLINE_MSB, ref_line);
+	reg = TBG_CNTRL_1_VHX_EXT_DE |
+			TBG_CNTRL_1_VHX_EXT_HS |
+			TBG_CNTRL_1_VHX_EXT_VS |
+			TBG_CNTRL_1_DWIN_DIS | /* HDCP off */
+			TBG_CNTRL_1_VH_TGL_2;
+	if (mode->flags & (DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC))
+		reg |= TBG_CNTRL_1_VH_TGL_0;
+	reg_set(client, REG_TBG_CNTRL_1, reg);
+
 	if(tda998x_is_monitor_hdmi(client) == 1) {
 		char vidformat;
 		vidformat = tda998x_cea_to_vidformat(drm_match_cea_mode(mode));
@@ -712,14 +738,12 @@ tda998x_encoder_mode_set(struct i2c_client *client)
 		tda998x_avi_infoframe_enable(client, mode);
 		tda998x_audio_infoframe_enable(client);
 
-/*HDCP  HDCP mode is turned off since a violet vertical
- * line appears at the left corner
- *		reg_set(client, REG_TX33, TX33_HDMI);
- */
+		reg_set(client, REG_TX33, TX33_HDMI);
+
 		/* set up audio registers */
-		reg_write(client, REG_ACR_CTS_0, 0x0);
-		reg_write(client, REG_ACR_CTS_1, 0x0);
-		reg_write(client, REG_ACR_CTS_2, 0x0);
+		reg_write(client, REG_ACR_CTS_0, 0x0a);
+		reg_write(client, REG_ACR_CTS_1, 0x22);
+		reg_write(client, REG_ACR_CTS_2, 0x01);
 
 		reg_write(client, REG_ACR_N_0, 0x0);
 		reg_write(client, REG_ACR_N_1, 0x18);
@@ -728,19 +752,19 @@ tda998x_encoder_mode_set(struct i2c_client *client)
 		reg_set(client, REG_DIP_FLAGS, DIP_FLAGS_ACR);
 
 		reg_write(client, REG_ENC_CNTRL, 0x04);
-		reg_write(client, REG_CTS_N, 0x33);
+		reg_write(client, REG_CTS_N, 0x31);
 		/* Set 2 channel I2S mode */
 		reg_write(client, REG_ENA_AP, 0x3);
 
 		/* set audio divider in pll settings */
-		reg_write(client, REG_AUDIO_DIV, 0x2);
+		reg_write(client, REG_AUDIO_DIV, 0x03);
 
 		/* select the audio input port clock */
 		reg_write(client, REG_AIP_CLKSEL, SEL_AIP_I2S);
 		reg_write(client, REG_MUX_AP, MUX_AP_SELECT_I2S);
 
 		/* select I2S format, and datasize */
-		reg_write(client, REG_I2S_FORMAT, 0x0a);
+		reg_write(client, REG_I2S_FORMAT, 0x0);
 
 		/* enable the audio FIFO: */
 		reg_clear(client, REG_AIP_CNTRL_0, AIP_CNTRL_0_RST_FIFO);
@@ -752,34 +776,6 @@ tda998x_encoder_mode_set(struct i2c_client *client)
 	}
 
 out:
-	reg_write16(client, REG_NPIX_MSB, mode->hdisplay - 1);
-	reg_write16(client, REG_NLINE_MSB, mode->vdisplay - 1);
-	reg_write16(client, REG_VS_LINE_STRT_1_MSB, line_start);
-	reg_write16(client, REG_VS_LINE_END_1_MSB, line_end);
-	reg_write16(client, REG_VS_PIX_STRT_1_MSB, hs_start);
-	reg_write16(client, REG_VS_PIX_END_1_MSB, hs_start);
-	reg_write16(client, REG_HS_PIX_START_MSB, hs_start);
-	reg_write16(client, REG_HS_PIX_STOP_MSB, hs_end);
-	reg_write16(client, REG_VWIN_START_1_MSB, vwin_start);
-	reg_write16(client, REG_VWIN_END_1_MSB, vwin_end);
-	reg_write16(client, REG_DE_START_MSB, de_start);
-	reg_write16(client, REG_DE_STOP_MSB, de_end);
-
-	/* let incoming pixels fill the active space (if any) */
-	reg_write(client, REG_ENABLE_SPACE, 0x01);
-
-	reg_write16(client, REG_REFPIX_MSB, ref_pix);
-	reg_write16(client, REG_REFLINE_MSB, ref_line);
-
-	reg = TBG_CNTRL_1_VHX_EXT_DE |
-			TBG_CNTRL_1_VHX_EXT_HS |
-			TBG_CNTRL_1_VHX_EXT_VS |
-			TBG_CNTRL_1_DWIN_DIS | /* HDCP off */
-			TBG_CNTRL_1_VH_TGL_2;
-	if (mode->flags & (DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC))
-		reg |= TBG_CNTRL_1_VH_TGL_0;
-	reg_set(client, REG_TBG_CNTRL_1, reg);
-
 	/* must be last register set: */
 	reg_clear(client, REG_TBG_CNTRL_0, TBG_CNTRL_0_SYNC_ONCE);
 }
