@@ -3703,6 +3703,7 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 {
 	int ret;
 	char tmp[10];
+	struct device *mpu_dev;
 
 	/* 1st get the MAC address from EEPROM */
 	ret = mem_acc->read(mem_acc, (char *)&am335x_mac_addr,
@@ -3751,6 +3752,11 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 			setup_beaglebone();
 	} else if (!strncmp("A335BNLT", config.name, 8)) {
 		daughter_brd_detected = false;
+		if(!strncmp("0A5A", config.version, 4) ||
+		   !strncmp("0A5B", config.version, 4)) {
+			mpu_dev = omap_device_get_by_hwmod_name("mpu");
+			opp_enable(mpu_dev, AM33XX_ES2_0_OPPNITRO_FREQ);
+		}
 		setup_beaglebone_black();
 	} else if (!strncmp("A335X_SK", config.name, 8)) {
 		daughter_brd_detected = false;
