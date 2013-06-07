@@ -1455,3 +1455,23 @@ int __init omap_init_gpmc(struct gpmc_devices_info *pdata, int pdata_len)
 
 	return 0;
 }
+
+void __init am33xx_gpu_init(void)
+{
+	int id = -1;
+	struct platform_device *pdev;
+	struct omap_hwmod *oh;
+	char *oh_name = "gfx";
+	char *dev_name = "pvrsrvkm";
+
+	oh = omap_hwmod_lookup(oh_name);
+	if (!oh) {
+		pr_err("Could not find %s hwmod data\n", oh_name);
+		return;
+	}
+
+	pdev = omap_device_build(dev_name, id, oh, NULL, 0, NULL, 0, 0);
+
+	WARN(IS_ERR(pdev), "could not build omap_device for %s\n", oh_name);
+
+}
