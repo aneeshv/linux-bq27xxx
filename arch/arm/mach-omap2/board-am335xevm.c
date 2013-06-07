@@ -3331,6 +3331,7 @@ static struct evm_dev_cfg beaglebone_black_dev_cfg[] = {
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{i2c2_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mcasp0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{sgx_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{NULL, 0, 0},
 };
 /* EVM - Starter Kit */
