@@ -80,7 +80,6 @@ static int am33xx_pm_prepare_late(void)
 
 	am335x_save_padconf();
 	am33xx_setup_pinmux_on_suspend();
-	am33xx_standby_setup(suspend_state);
 
 	return ret;
 }
@@ -176,6 +175,8 @@ static int am33xx_pm_suspend(void)
 		pr_err("Could not program GFX to low power state\n");
 
 	omap3_intc_suspend();
+
+	am33xx_standby_setup(suspend_state);
 
 	writel(0x0, AM33XX_CM_MPU_MPU_CLKCTRL);
 
