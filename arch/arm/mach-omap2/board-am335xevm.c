@@ -2031,6 +2031,25 @@ free:
 	return -1;
 }
 
+static struct pinmux_config clkout2_pin_mux[] = {
+	{"xdma_event_intr1.clkout2", OMAP_MUX_MODE3 | AM33XX_PIN_OUTPUT},
+	{NULL, 0},
+};
+
+static void bone_camera_cape_clkout2_init(void)
+{
+	void __iomem *base;
+	unsigned int val;
+
+	/* XXX: HACK */
+	base = ioremap(0x44E00700, SZ_4K);
+	val = (5 << 3) | (3 << 0); //32 MHz
+	writel(val, base);
+	iounmap(base);
+
+	setup_pin_mux(clkout2_pin_mux);
+}
+
 #define BEAGLEBONE_CAMERA_ORIENTATION GPIO_TO_PIN(0, 30)
 
 static void cssp_gpmc_init(void)
@@ -2061,6 +2080,8 @@ static void cssp_gpmc_init(void)
 			pr_info("Camera cape sensor is facing backward\n");
 		}
 	}
+
+	bone_camera_cape_clkout2_init();
 
 	platform_device_register(&cssp_camera);
 
@@ -3211,11 +3232,6 @@ static void am335x_rtc_init(int evm_id, int profile)
 }
 
 /* Enable clkout2 */
-static struct pinmux_config clkout2_pin_mux[] = {
-	{"xdma_event_intr1.clkout2", OMAP_MUX_MODE3 | AM33XX_PIN_OUTPUT},
-	{NULL, 0},
-};
-
 static void clkout2_enable(int evm_id, int profile)
 {
 	struct clk *ck_32;
@@ -3308,7 +3324,6 @@ static struct evm_dev_cfg beaglebone_old_dev_cfg[] = {
 /* Beaglebone Rev A3 and after */
 static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_NONE},
-	{clkout2_enable, DEV_ON_BASEBOARD, PROFILE_NONE},
 	{tps65217_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
@@ -3322,7 +3337,6 @@ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 /* Beaglebone Black */
 static struct evm_dev_cfg beaglebone_black_dev_cfg[] = {
 	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_NONE},
-	{clkout2_enable, DEV_ON_BASEBOARD, PROFILE_NONE},
 	{tps65217_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
