@@ -3788,7 +3788,8 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 	} else if (!strncmp("A335BNLT", config.name, 8)) {
 		daughter_brd_detected = false;
 		if(!strncmp("0A5A", config.version, 4) ||
-		   !strncmp("0A5B", config.version, 4)) {
+		   !strncmp("0A5B", config.version, 4) ||
+		   !strncmp("0A5C", config.version, 4)) {
 			mpu_dev = omap_device_get_by_hwmod_name("mpu");
 			opp_enable(mpu_dev, AM33XX_ES2_0_OPPNITRO_FREQ);
 		}
