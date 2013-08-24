@@ -22,7 +22,10 @@
  * Datasheets:
  * http://focus.ti.com/docs/prod/folders/print/bq27000.html
  * http://focus.ti.com/docs/prod/folders/print/bq27500.html
+ * http://www.ti.com/product/bq27411-g1
+ * http://www.ti.com/product/bq27421-g1
  * http://www.ti.com/product/bq27425-g1
+ * http://www.ti.com/product/bq27441-g1
  */
 
 #include <linux/module.h>
@@ -106,8 +109,8 @@ static __initdata u8 bq27200_regs[NUM_REGS] = {
 	0x24,	/* AP		*/
 };
 
-/* bq27425 registers */
-static __initdata u8 bq27425_regs[NUM_REGS] = {
+/* bq274xx registers */
+static __initdata u8 bq274xx_regs[NUM_REGS] = {
 	0x00,	/* CONTROL	*/
 	0x02,	/* TEMP		*/
 	0x1e,	/* INT TEMP	*/
@@ -156,7 +159,7 @@ struct bq27x00_access_methods {
 			bool single);
 };
 
-enum bq27x00_chip { BQ27200, BQ27500, BQ27425};
+enum bq27x00_chip { BQ27200, BQ27500, BQ274XX};
 
 struct bq27x00_reg_cache {
 	int temperature;
@@ -215,7 +218,7 @@ static enum power_supply_property bq27x00_battery_props[] = {
 	POWER_SUPPLY_PROP_HEALTH,
 };
 
-static enum power_supply_property bq27425_battery_props[] = {
+static enum power_supply_property bq274xx_battery_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
@@ -486,7 +489,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 	struct bq27x00_reg_cache cache = {0, };
 	bool is_bq27200 = di->chip == BQ27200;
 	bool is_bq27500 = di->chip == BQ27500;
-	bool is_bq27425 = di->chip == BQ27425;
+	bool is_bq274xx = di->chip == BQ274XX;
 
 	cache.flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, !is_bq27500);
 	if (cache.flags >= 0) {
@@ -501,7 +504,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			cache.health = -ENODATA;
 		} else {
 			cache.capacity = bq27x00_battery_read_soc(di);
-			if (!is_bq27425) {
+			if (!is_bq274xx) {
 				cache.energy = bq27x00_battery_read_energy(di);
 				cache.time_to_empty =
 					bq27x00_battery_read_time(di,
@@ -517,7 +520,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			cache.health = bq27x00_battery_read_health(di);
 		}
 		cache.temperature = bq27x00_battery_read_temperature(di);
-		if (!is_bq27425)
+		if (!is_bq274xx)
 			cache.cycle_count = bq27x00_battery_read_cyct(di);
 		cache.power_avg =
 			bq27x00_battery_read_pwr_avg(di, BQ27XXX_POWER_AVG);
@@ -768,9 +771,9 @@ static int __init bq27x00_powersupply_init(struct bq27x00_device_info *di)
 	int ret;
 
 	di->bat.type = POWER_SUPPLY_TYPE_BATTERY;
-	if (di->chip == BQ27425) {
-		di->bat.properties = bq27425_battery_props;
-		di->bat.num_properties = ARRAY_SIZE(bq27425_battery_props);
+	if (di->chip == BQ274XX) {
+		di->bat.properties = bq274xx_battery_props;
+		di->bat.num_properties = ARRAY_SIZE(bq274xx_battery_props);
 	} else {
 		di->bat.properties = bq27x00_battery_props;
 		di->bat.num_properties = ARRAY_SIZE(bq27x00_battery_props);
@@ -1027,8 +1030,8 @@ static int __init bq27x00_battery_probe(struct i2c_client *client,
 		regs = bq27200_regs;
 	else if (di->chip == BQ27500)
 		regs = bq27500_regs;
-	else if (di->chip == BQ27425)
-		regs = bq27425_regs;
+	else if (di->chip == BQ274XX)
+		regs = bq274xx_regs;
 	else {
 		dev_err(&client->dev,
 			"Unexpected gas gague: %d\n", di->chip);
@@ -1083,7 +1086,7 @@ static int bq27x00_battery_remove(struct i2c_client *client)
 static const struct i2c_device_id bq27x00_id[] = {
 	{ "bq27200", BQ27200 },
 	{ "bq27500", BQ27500 },
-	{ "bq27425", BQ27425 },
+	{ "bq274xx", BQ274XX },
 	{},
 };
 MODULE_DEVICE_TABLE(i2c, bq27x00_id);
