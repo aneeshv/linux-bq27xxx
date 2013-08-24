@@ -72,6 +72,28 @@ enum bq27x00_reg_index {
 	BQ27500_REG_CTRL
 };
 
+/* bq27421 registers */
+static u8 bq27421_regs[] = {
+	0x02,
+	0x1e,
+	0x04,
+	0x10,
+	0x06,
+	0xFF,
+	0xFF,
+	0xFF,
+	0xFF,
+	0x08,
+	0xFF,
+	0xFF,
+	0xFF,
+	0xFF,
+	0x1C,
+	0xFF,
+	0xFF,
+	0x00
+};
+
 /* TI G3 Firmware (v3.24) */
 static u8 bq27x00_fw_g3_regs[] = {
 	0x06,
@@ -135,7 +157,7 @@ struct bq27x00_access_methods {
 			bool single);
 };
 
-enum bq27x00_chip { BQ27000, BQ27500 };
+enum bq27x00_chip { BQ27000, BQ27500, BQ27421 };
 
 struct bq27x00_reg_cache {
 	int temperature;
@@ -863,7 +885,9 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 		"Gas Guage fw version 0x%04x; df version 0x%04x\n",
 		di->fw_ver, di->df_ver);
 
-	if (di->fw_ver == L1_FW_VERSION)
+	if (di->chip == BQ27421)
+		di->regs = bq27421_regs;
+	else if (di->fw_ver == L1_FW_VERSION)
 		di->regs = bq27x00_fw_l1_regs;
 	else if (di->fw_ver == G3_FW_VERSION)
 		di->regs = bq27x00_fw_g3_regs;
@@ -915,6 +939,7 @@ static int bq27x00_battery_remove(struct i2c_client *client)
 static const struct i2c_device_id bq27x00_id[] = {
 	{ "bq27200", BQ27000 },	/* bq27200 is same as bq27000, but with i2c */
 	{ "bq27500", BQ27500 },
+	{ "bq27421", BQ27421 },
 	{},
 };
 MODULE_DEVICE_TABLE(i2c, bq27x00_id);
