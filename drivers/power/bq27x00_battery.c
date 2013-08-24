@@ -709,31 +709,27 @@ static int bq27x00_read_i2c(struct bq27x00_device_info *di, u8 reg, bool single)
 static int bq27x00_write_i2c(struct bq27x00_device_info *di, u8 reg, int value, bool single)
 {
 	struct i2c_client *client = to_i2c_client(di->dev);
-	struct i2c_msg msg[2];
-	unsigned char data[2];
+	struct i2c_msg msg;
+	unsigned char data[4];
 	int ret;
 
 	if (!client->adapter)
 		return -ENODEV;
 
-	if (!single)
-		put_unaligned_le16(value, data);
-	else
-		data[0] = value;
+	data[0] = reg;
+	if (single) {
+		data[1] = (unsigned char)value;
+		msg.len = 2;
+	} else {
+		put_unaligned_le16(value, &data[1]);
+		msg.len = 3;
+	}
 
-	msg[0].addr = client->addr;
-	msg[0].flags = 0;
-	msg[0].buf = &reg;
-	msg[0].len = sizeof(reg);
-	msg[1].addr = client->addr;
-	msg[1].flags = 0;
-	msg[1].buf = data;
-	if (single)
-		msg[1].len = 1;
-	else
-		msg[1].len = 2;
+	msg.buf = data;
+	msg.addr = client->addr;
+	msg.flags = 0;
 
-	ret = i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg));
+	ret = i2c_transfer(client->adapter, &msg, 1);
 	if (ret < 0)
 		return ret;
 
