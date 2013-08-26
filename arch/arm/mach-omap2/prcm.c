@@ -70,7 +70,7 @@ static void omap_prcm_arch_reset(char mode, const char *cmd)
 		prcm_offs = WKUP_MOD;
 	} else if (cpu_is_am33xx()) {
 		prcm_offs = AM33XX_PRM_DEVICE_MOD;
-		omap2_prm_set_mod_reg_bits(OMAP4430_RST_GLOBAL_COLD_SW_MASK,
+		omap2_prm_set_mod_reg_bits(OMAP4430_RST_GLOBAL_WARM_SW_MASK,
 					prcm_offs, AM33XX_PRM_RSTCTRL_OFFSET);
 	} else if (cpu_is_omap34xx()) {
 		prcm_offs = OMAP3430_GR_MOD;
