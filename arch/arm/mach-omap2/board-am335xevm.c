@@ -917,9 +917,9 @@ static struct pinmux_config rmii1_pin_mux[] = {
 
 static struct pinmux_config i2c1_pin_mux[] = {
 	{"spi0_d1.i2c1_sda",    OMAP_MUX_MODE2 | AM33XX_SLEWCTRL_SLOW |
-					AM33XX_PULL_ENBL | AM33XX_INPUT_EN},
+					AM33XX_INPUT_EN},
 	{"spi0_cs0.i2c1_scl",   OMAP_MUX_MODE2 | AM33XX_SLEWCTRL_SLOW |
-					AM33XX_PULL_ENBL | AM33XX_INPUT_EN},
+					AM33XX_INPUT_EN},
 	{NULL, 0},
 };
 
@@ -995,10 +995,12 @@ static struct pinmux_config bone_black_mcasp0_pin_mux[] = {
 	{"mcasp0_ahclkr.mcasp0_axr2", OMAP_MUX_MODE2 | AM33XX_PIN_OUTPUT},
 	/* Same pin is used for rx, but for hdmi we don't need rx */
 	{"mcasp0_ahclkx.mcasp0_ahclkx", OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
+#if 0
 	{"spi0_d1.i2c1_sda",    OMAP_MUX_MODE2 | AM33XX_SLEWCTRL_SLOW |
 					AM33XX_PULL_ENBL | AM33XX_INPUT_EN},
 	{"spi0_cs0.i2c1_scl",   OMAP_MUX_MODE2 | AM33XX_SLEWCTRL_SLOW |
 					AM33XX_PULL_ENBL | AM33XX_INPUT_EN},
+#endif
 	{NULL, 0},
 };
 
@@ -2585,6 +2587,7 @@ static void lis331dlh_init(int evm_id, int profile)
 }
 
 static struct i2c_board_info am335x_i2c1_boardinfo[] = {
+#if 0
 	{
 		I2C_BOARD_INFO("tlv320aic3x", 0x1b),
 	},
@@ -2594,12 +2597,18 @@ static struct i2c_board_info am335x_i2c1_boardinfo[] = {
 	{
 		I2C_BOARD_INFO("tmp275", 0x48),
 	},
+#endif
+	{
+		/* bq27421 Gas Gauge */
+		I2C_BOARD_INFO("bq27500", 0x55),
+	}
+
 };
 
 static void i2c1_init(int evm_id, int profile)
 {
 	setup_pin_mux(i2c1_pin_mux);
-	omap_register_i2c_bus(2, 100, am335x_i2c1_boardinfo,
+	omap_register_i2c_bus(2, 25, am335x_i2c1_boardinfo,
 			ARRAY_SIZE(am335x_i2c1_boardinfo));
 	return;
 }
@@ -2621,7 +2630,6 @@ static struct i2c_board_info am335x_i2c2_boardinfo[] = {
 	{
 		/* Cape EEPROM */
 		I2C_BOARD_INFO("24c256", 0x56),
-		.platform_data  = &bone_daughter_board_eeprom_info,
 	},
 	{
 		/* Cape EEPROM */
@@ -3344,6 +3352,7 @@ static struct evm_dev_cfg beaglebone_black_dev_cfg[] = {
 	{mmc1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{i2c2_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{i2c1_init,     DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mcasp0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{sgx_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{NULL, 0, 0},
@@ -3777,6 +3786,8 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 	pr_info("Board name: %s\n", tmp);
 	snprintf(tmp, sizeof(config.version) + 1, "%s", config.version);
 	pr_info("Board version: %s\n", tmp);
+	printk("Aneesh: %s\n", config.name);
+
 
 	if (!strncmp("A335BONE", config.name, 8)) {
 		daughter_brd_detected = false;
