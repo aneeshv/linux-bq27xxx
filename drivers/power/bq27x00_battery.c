@@ -67,7 +67,7 @@ enum bq27xxx_reg_index {
 	NUM_REGS
 };
 
-/* bq275xx registers */
+/* bq27500 registers */
 static __initdata u8 bq27500_regs[NUM_REGS] = {
 	0x00,	/* CONTROL	*/
 	0x06,	/* TEMP		*/
@@ -134,6 +134,7 @@ static __initdata u8 bq274xx_regs[NUM_REGS] = {
 #define BQ27XXX_FLAG_SOCF		BIT(1) /* State-of-Charge threshold final */
 #define BQ27XXX_FLAG_SOC1		BIT(2) /* State-of-Charge threshold 1 */
 #define BQ27XXX_FLAG_FC			BIT(9)
+#define BQ27XXX_FLAG_OTD		BIT(14)
 #define BQ27XXX_FLAG_OTC		BIT(15)
 
 /* BQ27000 has different layout for Flags register */
@@ -159,7 +160,7 @@ struct bq27x00_access_methods {
 			bool single);
 };
 
-enum bq27x00_chip { BQ27200, BQ27500, BQ274XX};
+enum bq27x00_chip { BQ27200, BQ27500, BQ27520, BQ274XX};
 
 struct bq27x00_reg_cache {
 	int temperature;
@@ -451,13 +452,21 @@ static int bq27x00_battery_read_pwr_avg(struct bq27x00_device_info *di, u8 reg)
 		return tval;
 }
 
+static int overtemperature(struct bq27x00_device_info *di, u16 flags)
+{
+	if (di->chip == BQ27520)
+		return flags & (BQ27XXX_FLAG_OTC | BQ27XXX_FLAG_OTD);
+	else
+		return flags & BQ27XXX_FLAG_OTC;
+}
+
 /*
  * Read flag register.
  * Return < 0 if something fails.
  */
 static int bq27x00_battery_read_health(struct bq27x00_device_info *di)
 {
-	int tval;
+	u16 tval;
 
 	tval = bq27xxx_read(di, BQ27XXX_REG_FLAGS, false);
 	if (tval < 0) {
@@ -474,7 +483,7 @@ static int bq27x00_battery_read_health(struct bq27x00_device_info *di)
 	} else {
 		if (tval & BQ27XXX_FLAG_SOCF)
 			tval = POWER_SUPPLY_HEALTH_DEAD;
-		else if (tval & BQ27XXX_FLAG_OTC)
+		else if (overtemperature(di, tval))
 			tval = POWER_SUPPLY_HEALTH_OVERHEAT;
 		else
 			tval = POWER_SUPPLY_HEALTH_GOOD;
@@ -1028,14 +1037,14 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 
 	if (di->chip == BQ27200)
 		di->regs = bq27200_regs;
-	else if (di->chip == BQ27500)
-		di->regs = bq27500_regs;
+	else if (di->chip == BQ27500 || di->chip == BQ27520)
+		di->regs = bq275xx_regs;
 	else if (di->chip == BQ274XX)
 		di->regs = bq274xx_regs;
 	else {
 		dev_err(&client->dev,
 			"Unexpected gas gague: %d\n", di->chip);
-		di->regs = bq27500_regs;
+		di->regs = bq275xx_regs;
 	}
 
 	memcpy(di->regs, regs, NUM_REGS);
@@ -1086,6 +1095,7 @@ static int bq27x00_battery_remove(struct i2c_client *client)
 static const struct i2c_device_id bq27x00_id[] = {
 	{ "bq27200", BQ27200 },
 	{ "bq27500", BQ27500 },
+	{ "bq27520", BQ27520 },
 	{ "bq274xx", BQ274XX },
 	{},
 };
