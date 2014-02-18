@@ -2594,6 +2594,10 @@ static struct i2c_board_info am335x_i2c1_boardinfo[] = {
 	{
 		I2C_BOARD_INFO("tmp275", 0x48),
 	},
+	{
+		/* bq27421 Gas Gauge */
+		I2C_BOARD_INFO("bq27421", 0x55),
+	},
 };
 
 static void i2c1_init(int evm_id, int profile)
@@ -3343,6 +3347,7 @@ static struct evm_dev_cfg beaglebone_black_dev_cfg[] = {
 	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mmc1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+	{i2c1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{i2c2_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{mcasp0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
 	{sgx_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
