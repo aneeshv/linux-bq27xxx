@@ -48,6 +48,18 @@
 #define FW_VER_SUBCMD			0x0002
 #define DF_VER_SUBCMD			0x001F
 #define RESET_SUBCMD			0x0041
+#define SET_CFGUPDATE			0x0013
+#define SEAL					0x0020
+#define CONTROL_STATUS			0x0000
+
+#define BLOCK_DATA_CLASS		0x3E
+#define DATA_BLOCK				0x3F
+#define BLOCK_DATA				0x40
+#define BLOCK_DATA_CHECKSUM		0x60
+#define BLOCK_DATA_CONTROL		0x61
+
+#define BQ274XX_UNSEAL_KEY		0x80008000
+#define BQ274XX_SOFT_RESET		0x43
 
 #define INVALID_REG_ADDR		0xFF
 
@@ -172,6 +184,16 @@ struct bq27x00_reg_cache {
 	int current_now;
 };
 
+struct tambient_vars {
+	/* Parameters for the T ambient fix */
+	u16	chg_curr_thresh_default;
+	u16	quit_curr_default;
+	u8	class81[32];
+	bool initialized;
+	bool updated;
+	int temperature_old;
+};
+
 struct bq27x00_device_info {
 	struct device 		*dev;
 	int			id;
@@ -188,6 +210,8 @@ struct bq27x00_device_info {
 	struct bq27x00_access_methods bus;
 
 	struct mutex lock;
+
+	struct tambient_vars tambient;
 
 	u8 *regs;
 	int fw_ver;
@@ -220,6 +244,8 @@ MODULE_PARM_DESC(poll_interval, "battery poll interval in seconds - " \
 /*
  * Common code for BQ27x00 devices
  */
+static int init_tambient_fix(struct bq27x00_device_info *di);
+static int update_tambient(struct bq27x00_device_info *di);
 
 static inline int bq27x00_read(struct bq27x00_device_info *di, int reg_index,
 		bool single)
@@ -397,12 +423,23 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 	di->last_update = jiffies;
 }
 
+#define CHARGE_CURR_THRESHOLD	40
 static void bq27x00_battery_poll(struct work_struct *work)
 {
 	struct bq27x00_device_info *di =
 		container_of(work, struct bq27x00_device_info, work.work);
+	bool force_tambient_needed;
 
 	bq27x00_update(di);
+
+	force_tambient_needed = (((s16)di->cache.current_now) > CHARGE_CURR_THRESHOLD) &&
+			((di->cache.temperature > di->tambient.temperature_old + 50) ||
+			(di->cache.temperature < di->tambient.temperature_old - 50));
+
+	if (!di->tambient.updated ||  force_tambient_needed) {
+		update_tambient(di);
+		di->tambient.temperature_old = di->cache.temperature;
+	}
 
 	if (poll_interval > 0) {
 		/* The timer does not have to be accurate. */
@@ -410,7 +447,6 @@ static void bq27x00_battery_poll(struct work_struct *work)
 		schedule_delayed_work(&di->work, poll_interval * HZ);
 	}
 }
-
 
 /*
  * Return the battery temperature in tenths of degree Celsius
@@ -834,6 +870,390 @@ static struct attribute *bq27x00_attributes[] = {
 static const struct attribute_group bq27x00_attr_group = {
 	.attrs = bq27x00_attributes,
 };
+
+static int bq27x00_read_i2c_blk(struct bq27x00_device_info *di, u8 reg, u8 *data, u8 len)
+{
+	struct i2c_client *client = to_i2c_client(di->dev);
+	struct i2c_msg msg[2];
+	int ret;
+
+	if (!client->adapter)
+		return -ENODEV;
+
+	msg[0].addr = client->addr;
+	msg[0].flags = 0;
+	msg[0].buf = &reg;
+	msg[0].len = 1;
+
+	msg[1].addr = client->addr;
+	msg[1].flags = I2C_M_RD;
+	msg[1].buf = data;
+	msg[1].len = len;
+
+	ret = i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg));
+	if (ret < 0)
+		return ret;
+
+	return ret;
+}
+
+static int bq27x00_write_i2c_blk(struct bq27x00_device_info *di, u8 reg, u8 *data, u8 sz)
+{
+	struct i2c_client *client = to_i2c_client(di->dev);
+	struct i2c_msg msg;
+	int ret;
+	u8 buf[33];
+
+	if (!client->adapter)
+		return -ENODEV;
+
+	buf[0] = reg;
+	memcpy(&buf[1], data, sz);
+
+	msg.buf = buf;
+	msg.addr = client->addr;
+	msg.flags = 0;
+	msg.len = sz + 1;
+
+	ret = i2c_transfer(client->adapter, &msg, 1);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
+static int control_cmd_wr(struct bq27x00_device_info *di, u16 cmd)
+{
+	dev_dbg(di->dev, "%s: %04x\n", __FUNCTION__, cmd);
+	return bq27x00_write_i2c(di, CONTROL_CMD, cmd, false);
+}
+
+static int control_cmd_read(struct bq27x00_device_info *di, u16 cmd)
+{
+	dev_dbg(di->dev, "%s: %04x\n", __FUNCTION__, cmd);
+
+	bq27x00_write_i2c(di, CONTROL_CMD, cmd, false);
+
+	msleep(10);
+
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
+}
+
+#define SEAL_POLLING_RETRY_LIMIT	1000
+
+static inline int sealed(struct bq27x00_device_info *di)
+{
+	return control_cmd_read(di, CONTROL_STATUS) & (1 << 13);
+}
+
+static int unseal(struct bq27x00_device_info *di, u32 key)
+{
+	int i = 0;
+
+	if (!sealed(di))
+		goto out;
+
+	bq27x00_write_i2c(di, CONTROL_CMD, key & 0xFFFF, false);
+	msleep(10);
+	bq27x00_write_i2c(di, CONTROL_CMD, (key & 0xFFFF0000) >> 16, false);
+	msleep(10);
+
+	while (i < SEAL_POLLING_RETRY_LIMIT) {
+		i++;
+		if (!sealed(di))
+			break;
+		msleep(10);
+	}
+
+out:
+	if ( i == SEAL_POLLING_RETRY_LIMIT) {
+		dev_err(di->dev, "%s: failed\n", __FUNCTION__);
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+static int seal(struct bq27x00_device_info *di)
+{
+	int i = 0;
+
+	if (sealed(di))
+		goto out;
+
+	bq27x00_write_i2c(di, CONTROL_CMD, SEAL, false);
+
+	while (i < SEAL_POLLING_RETRY_LIMIT) {
+		i++;
+		if (sealed(di))
+			break;
+		msleep(10);
+	}
+
+out:
+	if ( i == SEAL_POLLING_RETRY_LIMIT) {
+		dev_err(di->dev, "%s: failed\n", __FUNCTION__);
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+#define CFG_UPDATE_POLLING_RETRY_LIMIT 50
+static int enter_cfg_update_mode(struct bq27x00_device_info *di)
+{
+	int i = 0;
+	u16 flags;
+
+	control_cmd_wr(di, SET_CFGUPDATE);
+	msleep(10);
+
+	while (i < CFG_UPDATE_POLLING_RETRY_LIMIT) {
+		i++;
+		flags = bq27x00_read(di, BQ27x00_REG_FLAGS, false);
+		if (flags & (1 << 4))
+			break;
+		msleep(100);
+	}
+
+	if (i == CFG_UPDATE_POLLING_RETRY_LIMIT) {
+		dev_err(di->dev, "%s: failed %04x\n", __FUNCTION__, flags);
+		return 0;
+	}
+
+	return 1;
+}
+
+static int exit_cfg_update_mode(struct bq27x00_device_info *di)
+{
+	int i = 0;
+	u16 flags;
+
+	control_cmd_wr(di, BQ274XX_SOFT_RESET);
+
+	while (i < CFG_UPDATE_POLLING_RETRY_LIMIT) {
+		i++;
+		flags = bq27x00_read(di, BQ27x00_REG_FLAGS, false);
+		if (!(flags & (1 << 4)))
+			break;
+		msleep(100);
+	}
+
+	if (i == CFG_UPDATE_POLLING_RETRY_LIMIT) {
+		dev_err(di->dev, "%s: failed %04x\n", __FUNCTION__, flags);
+		return 0;
+	}
+
+	return 1;
+}
+static u8 checksum(u8 *data)
+{
+	u16 sum = 0;
+	int i;
+
+	for (i = 0; i < 32; i++)
+		sum += data[i];
+
+	sum &= 0xFF;
+
+	return 0xFF - sum;
+}
+
+#ifdef BQ27XXX_DEBUG
+static void print_buf(const char *msg, u8 *buf)
+{
+	int i;
+
+	printk("\nbq: %s buf: ", msg);
+	for (i = 0; i < 32; i++)
+		printk("%02x ", buf[i]);
+
+	printk("\n");
+}
+#else
+#define print_buf(a, b)
+#endif
+
+static int update_dm_block(struct bq27x00_device_info *di, u8 class,
+	u16 blk_offset, u8 offset_in_blk, u8 *data, u16 sz)
+{
+	u8 buf1[32];
+	u8 buf2[32];
+	u8 cksum;
+	u8 *bufp;
+
+	if (offset_in_blk + sz > 32)
+		return 0;
+
+	bq27x00_write_i2c(di, BLOCK_DATA_CONTROL, 0, true);
+	msleep(10);
+
+	bq27x00_write_i2c(di, BLOCK_DATA_CLASS, class, true);
+	msleep(10);
+
+	bq27x00_write_i2c(di, DATA_BLOCK, blk_offset, true);
+	msleep(10);
+
+	if (sz < 32) {
+		bq27x00_read_i2c_blk(di, BLOCK_DATA, buf1, 32);
+		memcpy(buf1 + offset_in_blk, data, sz);
+		bufp = buf1;
+	} else {
+		bufp = data;
+	}
+
+	bq27x00_write_i2c_blk(di, BLOCK_DATA, bufp, 32);
+	msleep(10);
+	print_buf(__FUNCTION__, bufp);
+
+	cksum = checksum(bufp);
+	bq27x00_write_i2c(di, BLOCK_DATA_CHECKSUM, cksum, true);
+	msleep(10);
+
+	/* Read back and compare to make sure write is successful */
+	bq27x00_write_i2c(di, DATA_BLOCK, blk_offset, true);
+	msleep(10);
+	bq27x00_read_i2c_blk(di, BLOCK_DATA, buf2, 32);
+	if (memcmp(bufp, buf2, 32))
+		return 0;
+	else
+		return 1;
+}
+
+static int read_dm_block(struct bq27x00_device_info *di, u8 class,
+	u16 blk_offset, u8 offset_in_blk, u8 *data, u16 sz)
+{
+	u8 buf[32];
+	u8 cksum_calc, cksum;
+
+	if (offset_in_blk + sz > 32)
+		return 0;
+
+	bq27x00_write_i2c(di, BLOCK_DATA_CONTROL, 0, true);
+	msleep(10);
+
+	bq27x00_write_i2c(di, BLOCK_DATA_CLASS, class, true);
+	msleep(10);
+
+	bq27x00_write_i2c(di, DATA_BLOCK, blk_offset, true);
+	msleep(10);
+
+	bq27x00_read_i2c_blk(di, BLOCK_DATA, buf, 32);
+
+	cksum_calc = checksum(buf);
+	cksum = bq27x00_read_i2c(di, BLOCK_DATA_CHECKSUM, true);
+	if (cksum != cksum_calc)
+		return 0;
+
+	print_buf(__FUNCTION__, buf);
+	memcpy(data, buf + offset_in_blk, sz);
+
+	return 1;
+}
+
+#define CHARGE_CURRENT_THRESHOLD_DEFAULT	453
+#define QUIT_CURRENT_DEFAULT				867
+static int update_tambient(struct bq27x00_device_info *di)
+{
+	int ret = 0;
+	u8 *buf;
+
+	if (!di->tambient.initialized) {
+		if (init_tambient_fix(di))
+			di->tambient.initialized = true;
+		return 0;
+	}
+
+	mutex_lock(&di->lock);
+	if (!unseal(di, BQ274XX_UNSEAL_KEY))
+		goto out;
+
+	if (!enter_cfg_update_mode(di))
+		goto out;
+
+	buf = di->tambient.class81;
+	/* Change Charge Current Threshold = 10 */
+	put_unaligned_be16(10, &buf[2]);
+	/* Quit Current = 11 */
+	put_unaligned_be16(11, &buf[4]);
+
+	if (!update_dm_block(di, 81, 0, 0, buf, 32))
+		goto out;
+	exit_cfg_update_mode(di);
+	seal(di);
+	/* Wait for 5 seconds */
+	msleep(5 * 1000);
+	unseal(di, BQ274XX_UNSEAL_KEY);
+	if (!enter_cfg_update_mode(di))
+		goto out;
+
+	/* Set back to default values */
+	put_unaligned_be16(CHARGE_CURRENT_THRESHOLD_DEFAULT, &buf[2]);
+	put_unaligned_be16(QUIT_CURRENT_DEFAULT, &buf[4]);
+
+	if (!update_dm_block(di, 81, 0, 0, buf, 32))
+		goto out;
+
+	ret = 1;
+
+out:
+	exit_cfg_update_mode(di);
+	seal(di);
+	mutex_unlock(&di->lock);
+
+	if (ret) {
+		dev_dbg(di->dev, "%s: Success\n", __FUNCTION__);
+		di->tambient.updated = true;
+	} else {
+		dev_err(di->dev, "%s: Failed\n", __FUNCTION__);
+	}
+
+	return ret;
+}
+
+static int init_tambient_fix(struct bq27x00_device_info *di)
+{
+	int ret = 0;
+	u8 *buf = di->tambient.class81;
+
+	mutex_lock(&di->lock);
+
+	di->tambient.chg_curr_thresh_default = 453;
+	di->tambient.quit_curr_default = 867;
+
+	if (!unseal(di, BQ274XX_UNSEAL_KEY))
+		goto out;
+
+	if (!enter_cfg_update_mode(di))
+		goto out;
+
+	if (!read_dm_block(di, 81, 0, 0, buf, 32))
+		goto out;
+
+	/* Set to default values */
+	put_unaligned_be16(CHARGE_CURRENT_THRESHOLD_DEFAULT, &buf[2]);
+	put_unaligned_be16(QUIT_CURRENT_DEFAULT, &buf[4]);
+
+	/* Set charge relax time to 2 */
+	buf[8] = 2;
+
+	if (!update_dm_block(di, 81, 0, 0, buf, 32))
+		goto out;
+
+	ret = 1;
+
+out:
+	exit_cfg_update_mode(di);
+	seal(di);
+	mutex_unlock(&di->lock);
+
+	if (ret)
+		dev_dbg(di->dev, "%s: Success\n", __FUNCTION__);
+	else
+		dev_err(di->dev, "%s: Failed\n", __FUNCTION__);
+
+	return ret;
+}
 
 static int bq27x00_battery_probe(struct i2c_client *client,
 				 const struct i2c_device_id *id)
