@@ -592,15 +592,16 @@ static int bq27x00_battery_get_property(struct power_supply *psy,
 	int ret = 0;
 	struct bq27x00_device_info *di = to_bq27x00_device_info(psy);
 
-	mutex_lock(&di->lock);
 	if (time_is_before_jiffies(di->last_update + 5 * HZ)) {
 		cancel_delayed_work_sync(&di->work);
 		bq27x00_battery_poll(&di->work.work);
 	}
-	mutex_unlock(&di->lock);
+	mutex_lock(&di->lock);
 
-	if (psp != POWER_SUPPLY_PROP_PRESENT && di->cache.flags < 0)
-		return -ENODEV;
+	if (psp != POWER_SUPPLY_PROP_PRESENT && di->cache.flags < 0) {
+		ret = -ENODEV;
+		goto out;
+	}
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
@@ -649,8 +650,12 @@ static int bq27x00_battery_get_property(struct power_supply *psy,
 		ret = bq27x00_battery_energy(di, val);
 		break;
 	default:
-		return -EINVAL;
+		ret = -EINVAL;
+		break;
 	}
+
+out:
+	mutex_unlock(&di->lock);
 
 	return ret;
 }
