@@ -38,6 +38,8 @@
 
 #include <linux/power/bq27x00_battery.h>
 
+#define BQ27XXX_DEBUG
+
 #define DRIVER_VERSION			"1.2.0"
 #define G3_FW_VERSION			0x0324
 #define L1_FW_VERSION			0x0600
@@ -60,6 +62,8 @@
 
 #define BQ274XX_UNSEAL_KEY		0x80008000
 #define BQ274XX_SOFT_RESET		0x43
+#define BQ274XX_FCC				0x0e
+#define BQ274XX_UNFILTERED_FCC	0x2C
 
 #define INVALID_REG_ADDR		0xFF
 
@@ -236,7 +240,7 @@ static enum power_supply_property bq27x00_battery_props[] = {
 	POWER_SUPPLY_PROP_ENERGY_NOW
 };
 
-static unsigned int poll_interval = 360;
+static unsigned int poll_interval = 10;
 module_param(poll_interval, uint, 0644);
 MODULE_PARM_DESC(poll_interval, "battery poll interval in seconds - " \
 				"0 disables polling");
@@ -246,6 +250,7 @@ MODULE_PARM_DESC(poll_interval, "battery poll interval in seconds - " \
  */
 static int init_tambient_fix(struct bq27x00_device_info *di);
 static int update_tambient(struct bq27x00_device_info *di);
+static int bq27x00_read_i2c(struct bq27x00_device_info *di, u8 reg, bool single);
 
 static inline int bq27x00_read(struct bq27x00_device_info *di, int reg_index,
 		bool single)
@@ -420,6 +425,11 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 		power_supply_changed(&di->bat);
 
 	di->last_update = jiffies;
+	printk("bq: avv: soc %d temp %d current %d volt %d fcc %d real-fcc %d\n",
+		cache.capacity, cache.temperature, (s16)cache.current_now,
+		bq27x00_read(di, BQ27x00_REG_VOLT, false),
+		bq27x00_read_i2c(di, BQ274XX_FCC, false),
+		bq27x00_read_i2c(di, BQ274XX_UNFILTERED_FCC, false));
 }
 
 #define CHARGE_CURR_THRESHOLD	40
@@ -431,6 +441,7 @@ static void bq27x00_battery_poll(struct work_struct *work)
 
 	bq27x00_update(di);
 
+	printk("bq: curr %d temp old %d temp %d\n", (s16) di->cache.current_now, di->tambient.temperature_old, di->cache.temperature); 
 	force_tambient_needed = (((s16)di->cache.current_now) > CHARGE_CURR_THRESHOLD) &&
 			((di->cache.temperature > di->tambient.temperature_old + 50) ||
 			(di->cache.temperature < di->tambient.temperature_old - 50));
@@ -780,7 +791,7 @@ static int bq27x00_battery_reset(struct bq27x00_device_info *di)
 {
 	dev_info(di->dev, "Gas Gauge Reset\n");
 
-	bq27x00_write_i2c(di, CONTROL_CMD, RESET_SUBCMD, false);
+	bq27x00_battery_poll(&di->work.work);
 
 	msleep(10);
 
@@ -793,6 +804,8 @@ static int bq27x00_battery_read_fw_version(struct bq27x00_device_info *di)
 	bq27x00_write_i2c(di, CONTROL_CMD, FW_VER_SUBCMD, false);
 
 	msleep(10);
+
+	di->tambient.temperature_old = di->cache.temperature + 70;
 
 	return bq27x00_read_i2c(di, CONTROL_CMD, false);
 }
@@ -970,6 +983,8 @@ static int unseal(struct bq27x00_device_info *di, u32 key)
 	}
 
 out:
+	printk("bq: %s: i = %d\n", __FUNCTION__, i);//av:
+
 	if ( i == SEAL_POLLING_RETRY_LIMIT) {
 		dev_err(di->dev, "%s: failed\n", __FUNCTION__);
 		return 0;
@@ -995,6 +1010,8 @@ static int seal(struct bq27x00_device_info *di)
 	}
 
 out:
+	printk("bq: %s: i = %d\n", __FUNCTION__, i); //av:
+
 	if ( i == SEAL_POLLING_RETRY_LIMIT) {
 		dev_err(di->dev, "%s: failed\n", __FUNCTION__);
 		return 0;
@@ -1020,6 +1037,8 @@ static int enter_cfg_update_mode(struct bq27x00_device_info *di)
 		msleep(100);
 	}
 
+	printk("bq: %s: i = %d\n", __FUNCTION__, i);
+
 	if (i == CFG_UPDATE_POLLING_RETRY_LIMIT) {
 		dev_err(di->dev, "%s: failed %04x\n", __FUNCTION__, flags);
 		return 0;
@@ -1043,6 +1062,8 @@ static int exit_cfg_update_mode(struct bq27x00_device_info *di)
 		msleep(100);
 	}
 
+	printk("bq: %s: i = %d\n", __FUNCTION__, i);
+
 	if (i == CFG_UPDATE_POLLING_RETRY_LIMIT) {
 		dev_err(di->dev, "%s: failed %04x\n", __FUNCTION__, flags);
 		return 0;
@@ -1050,6 +1071,7 @@ static int exit_cfg_update_mode(struct bq27x00_device_info *di)
 
 	return 1;
 }
+static void print_buf(const char *msg, u8 *buf);
 static u8 checksum(u8 *data)
 {
 	u16 sum = 0;
@@ -1060,6 +1082,7 @@ static u8 checksum(u8 *data)
 
 	sum &= 0xFF;
 
+	printk("bq cksum %02x\n", 0xFF - sum);
 	return 0xFF - sum;
 }
 
@@ -1073,6 +1096,7 @@ static void print_buf(const char *msg, u8 *buf)
 		printk("%02x ", buf[i]);
 
 	printk("\n");
+
 }
 #else
 #define print_buf(a, b)
