@@ -262,18 +262,6 @@ static inline int bq27xxx_write(struct bq27x00_device_info *di, int reg_index,
 }
 
 /*
- * Higher versions of the chip like BQ27425 and BQ27500
- * differ from BQ27200 in calculation of certain
- * parameters. Hence we need to check for the chip type.
- */
-static bool bq27xxx_is_chip_version_higher(struct bq27x00_device_info *di)
-{
-	if (di->chip == BQ27425 || di->chip == BQ27500)
-		return true;
-	return false;
-}
-
-/*
  * Return the battery State-of-Charge
  * Or < 0 if something fails.
  */
@@ -353,10 +341,10 @@ static int bq27x00_battery_read_dcap(struct bq27x00_device_info *di)
 		return dcap;
 	}
 
-	if (bq27xxx_is_chip_version_higher(di))
-		dcap *= 1000;
-	else
+	if (di->chip == BQ27200)
 		dcap = dcap * 256 * 3570 / BQ27200_RS;
+	else
+		dcap *= 1000;
 
 	return dcap;
 }
@@ -375,10 +363,10 @@ static int bq27x00_battery_read_energy(struct bq27x00_device_info *di)
 		return ae;
 	}
 
-	if (di->chip == BQ27500)
-		ae *= 1000;
-	else
+	if (di->chip == BQ27200)
 		ae = ae * 29200 / BQ27200_RS;
+	else
+		ae *= 1000;
 
 	return ae;
 }
@@ -397,7 +385,7 @@ static int bq27x00_battery_read_temperature(struct bq27x00_device_info *di)
 		return temp;
 	}
 
-	if (!bq27xxx_is_chip_version_higher(di))
+	if (di->chip == BQ27200)
 		temp = 5 * temp / 2;
 
 	return temp;
@@ -454,10 +442,10 @@ static int bq27x00_battery_read_pwr_avg(struct bq27x00_device_info *di, u8 reg)
 		return tval;
 	}
 
-	if (di->chip == BQ27500)
-		return tval;
-	else
+	if (di->chip == BQ27200)
 		return (tval * BQ27200_POWER_CONSTANT) / BQ27200_RS;
+	else
+		return tval;
 }
 
 /*
@@ -496,13 +484,13 @@ static int bq27x00_battery_read_health(struct bq27x00_device_info *di)
 static void bq27x00_update(struct bq27x00_device_info *di)
 {
 	struct bq27x00_reg_cache cache = {0, };
+	bool is_bq27200 = di->chip == BQ27200;
 	bool is_bq27500 = di->chip == BQ27500;
 	bool is_bq27425 = di->chip == BQ27425;
 
 	cache.flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, !is_bq27500);
 	if (cache.flags >= 0) {
-		if (!is_bq27500 && !is_bq27425
-				&& (cache.flags & BQ27200_FLAG_CI)) {
+		if (is_bq27200 && (cache.flags & BQ27200_FLAG_CI)) {
 			dev_info(di->dev, "battery is not calibrated! ignoring capacity values\n");
 			cache.capacity = -ENODATA;
 			cache.energy = -ENODATA;
@@ -578,10 +566,7 @@ static int bq27x00_battery_current(struct bq27x00_device_info *di,
 		return curr;
 	}
 
-	if (bq27xxx_is_chip_version_higher(di)) {
-		/* bq27500 returns signed value */
-		val->intval = (int)((s16)curr) * 1000;
-	} else {
+	if (di->chip == BQ27200) {
 		flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, false);
 		if (flags & BQ27200_FLAG_CHGS) {
 			dev_dbg(di->dev, "negative current!\n");
@@ -589,6 +574,9 @@ static int bq27x00_battery_current(struct bq27x00_device_info *di,
 		}
 
 		val->intval = curr * 3570 / BQ27200_RS;
+	} else {
+		/* Other gauges return signed value */
+		val->intval = (int)((s16)curr) * 1000;
 	}
 
 	return 0;
@@ -599,14 +587,7 @@ static int bq27x00_battery_status(struct bq27x00_device_info *di,
 {
 	int status;
 
-	if (bq27xxx_is_chip_version_higher(di)) {
-		if (di->cache.flags & BQ27XXX_FLAG_FC)
-			status = POWER_SUPPLY_STATUS_FULL;
-		else if (di->cache.flags & BQ27XXX_FLAG_DSC)
-			status = POWER_SUPPLY_STATUS_DISCHARGING;
-		else
-			status = POWER_SUPPLY_STATUS_CHARGING;
-	} else {
+	if (di->chip == BQ27200) {
 		if (di->cache.flags & BQ27200_FLAG_FC)
 			status = POWER_SUPPLY_STATUS_FULL;
 		else if (di->cache.flags & BQ27200_FLAG_CHGS)
@@ -615,6 +596,13 @@ static int bq27x00_battery_status(struct bq27x00_device_info *di,
 			status = POWER_SUPPLY_STATUS_NOT_CHARGING;
 		else
 			status = POWER_SUPPLY_STATUS_DISCHARGING;
+	} else {
+		if (di->cache.flags & BQ27XXX_FLAG_FC)
+			status = POWER_SUPPLY_STATUS_FULL;
+		else if (di->cache.flags & BQ27XXX_FLAG_DSC)
+			status = POWER_SUPPLY_STATUS_DISCHARGING;
+		else
+			status = POWER_SUPPLY_STATUS_CHARGING;
 	}
 
 	val->intval = status;
@@ -627,21 +615,21 @@ static int bq27x00_battery_capacity_level(struct bq27x00_device_info *di,
 {
 	int level;
 
-	if (bq27xxx_is_chip_version_higher(di)) {
-		if (di->cache.flags & BQ27XXX_FLAG_FC)
-			level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-		else if (di->cache.flags & BQ27XXX_FLAG_SOC1)
-			level = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
-		else if (di->cache.flags & BQ27XXX_FLAG_SOCF)
-			level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
-		else
-			level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
-	} else {
+	if (di->chip == BQ27200) {
 		if (di->cache.flags & BQ27200_FLAG_FC)
 			level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 		else if (di->cache.flags & BQ27200_FLAG_EDV1)
 			level = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
 		else if (di->cache.flags & BQ27200_FLAG_EDVF)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+		else
+			level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	} else {
+		if (di->cache.flags & BQ27XXX_FLAG_FC)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+		else if (di->cache.flags & BQ27XXX_FLAG_SOC1)
+			level = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+		else if (di->cache.flags & BQ27XXX_FLAG_SOCF)
 			level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 		else
 			level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
