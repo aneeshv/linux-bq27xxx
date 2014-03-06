@@ -474,17 +474,17 @@ static int bq27x00_battery_read_health(struct bq27x00_device_info *di)
 		return tval;
 	}
 
-	if ((di->chip == BQ27500)) {
-		if (tval & BQ27XXX_FLAG_SOCF)
+	if ((di->chip == BQ27200)) {
+		if (tval & BQ27000_FLAG_EDV1)
 			tval = POWER_SUPPLY_HEALTH_DEAD;
-		else if (tval & BQ27XXX_FLAG_OTC)
-			tval = POWER_SUPPLY_HEALTH_OVERHEAT;
 		else
 			tval = POWER_SUPPLY_HEALTH_GOOD;
 		return tval;
 	} else {
-		if (tval & BQ27000_FLAG_EDV1)
+		if (tval & BQ27XXX_FLAG_SOCF)
 			tval = POWER_SUPPLY_HEALTH_DEAD;
+		else if (tval & BQ27XXX_FLAG_OTC)
+			tval = POWER_SUPPLY_HEALTH_OVERHEAT;
 		else
 			tval = POWER_SUPPLY_HEALTH_GOOD;
 		return tval;
