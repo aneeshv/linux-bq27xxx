@@ -77,6 +77,12 @@
 #define BQ27000_RS			20 /* Resistor sense */
 #define BQ27x00_POWER_CONSTANT		(256 * 29200 / 1000)
 
+/* Subcommands of Control() */
+#define DEV_TYPE_SUBCMD			0x0001
+#define FW_VER_SUBCMD			0x0002
+#define DF_VER_SUBCMD			0x001F
+#define RESET_SUBCMD			0x0041
+
 struct bq27x00_device_info;
 struct bq27x00_access_methods {
 	int (*read)(struct bq27x00_device_info *di, u8 reg, bool single);
@@ -114,6 +120,9 @@ struct bq27x00_device_info {
 	struct bq27x00_access_methods bus;
 
 	struct mutex lock;
+
+	int fw_ver;
+	int df_ver;
 };
 
 static enum power_supply_property bq27x00_battery_props[] = {
@@ -782,6 +791,134 @@ static int bq27x00_read_i2c(struct bq27x00_device_info *di, u8 reg, bool single)
 	return ret;
 }
 
+static int bq27x00_write_i2c(struct bq27x00_device_info *di, u8 reg, int value, bool single)
+{
+	struct i2c_client *client = to_i2c_client(di->dev);
+	struct i2c_msg msg;
+	unsigned char data[4];
+	int ret;
+
+	if (!client->adapter)
+		return -ENODEV;
+
+	data[0] = reg;
+	if (single) {
+		data[1] = (unsigned char)value;
+		msg.len = 2;
+	} else {
+		put_unaligned_le16(value, &data[1]);
+		msg.len = 3;
+	}
+
+	msg.buf = data;
+	msg.addr = client->addr;
+	msg.flags = 0;
+
+	ret = i2c_transfer(client->adapter, &msg, 1);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
+static int bq27x00_battery_reset(struct bq27x00_device_info *di)
+{
+	dev_info(di->dev, "Gas Gauge Reset\n");
+
+	bq27x00_write_i2c(di, CONTROL_CMD, RESET_SUBCMD, false);
+
+	msleep(10);
+
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
+}
+
+static int bq27x00_battery_read_fw_version(struct bq27x00_device_info *di)
+{
+	bq27x00_write_i2c(di, CONTROL_CMD, FW_VER_SUBCMD, false);
+
+	msleep(10);
+
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
+}
+
+static int bq27x00_battery_read_device_type(struct bq27x00_device_info *di)
+{
+	bq27x00_write_i2c(di, CONTROL_CMD, DEV_TYPE_SUBCMD, false);
+
+	msleep(10);
+
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
+}
+
+static int bq27x00_battery_read_dataflash_version(struct bq27x00_device_info *di)
+{
+	bq27x00_write_i2c(di, CONTROL_CMD, DF_VER_SUBCMD, false);
+
+	msleep(10);
+
+	return bq27x00_read_i2c(di, CONTROL_CMD, false);
+}
+
+static ssize_t show_firmware_version(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+	int ver;
+
+	ver = bq27x00_battery_read_fw_version(di);
+
+	return sprintf(buf, "%d\n", ver);
+}
+
+static ssize_t show_dataflash_version(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+	int ver;
+
+	ver = bq27x00_battery_read_dataflash_version(di);
+
+	return sprintf(buf, "%d\n", ver);
+}
+
+static ssize_t show_device_type(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+	int dev_type;
+
+	dev_type = bq27x00_battery_read_device_type(di);
+
+	return sprintf(buf, "%d\n", dev_type);
+}
+
+static ssize_t show_reset(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+
+	bq27x00_battery_reset(di);
+
+	return sprintf(buf, "okay\n");
+}
+
+static DEVICE_ATTR(fw_version, S_IRUGO, show_firmware_version, NULL);
+static DEVICE_ATTR(df_version, S_IRUGO, show_dataflash_version, NULL);
+static DEVICE_ATTR(device_type, S_IRUGO, show_device_type, NULL);
+static DEVICE_ATTR(reset, S_IRUGO, show_reset, NULL);
+
+static struct attribute *bq27x00_attributes[] = {
+	&dev_attr_fw_version.attr,
+	&dev_attr_df_version.attr,
+	&dev_attr_device_type.attr,
+	&dev_attr_reset.attr,
+	NULL
+};
+
+static const struct attribute_group bq27x00_attr_group = {
+	.attrs = bq27x00_attributes,
+};
+
 static int bq27x00_battery_probe(struct i2c_client *client,
 				 const struct i2c_device_id *id)
 {
@@ -820,11 +957,17 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 	di->bat.name = name;
 	di->bus.read = &bq27x00_read_i2c;
 
+	di->fw_ver = bq27x00_battery_read_fw_version(di);
+	dev_info(&client->dev, "Gas Guage fw version is 0x%04x\n", di->fw_ver);
+
 	retval = bq27x00_powersupply_init(di);
 	if (retval)
 		goto batt_failed_3;
 
 	i2c_set_clientdata(client, di);
+	retval = sysfs_create_group(&client->dev.kobj, &bq27x00_attr_group);
+	if (retval)
+		dev_err(&client->dev, "could not create sysfs files\n");
 
 	return 0;
 
