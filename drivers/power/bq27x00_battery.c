@@ -88,6 +88,27 @@ static __initdata u8 bq27500_regs[NUM_REGS] = {
 	0x24,	/* AP		*/
 };
 
+/* bq27520 registers */
+static __initdata u8 bq27520_regs[] = {
+	0x00,	/* CONTROL	*/
+	0x06,	/* TEMP		*/
+	0xFF,	/* INT TEMP - NA*/
+	0x08,	/* VOLT		*/
+	0x14,	/* AVG CURR	*/
+	0x0A,	/* FLAGS	*/
+	0x16,	/* TTE		*/
+	0x18,	/* TTF		*/
+	0x1c,	/* TTES		*/
+	0x26,	/* TTECP	*/
+	0x0C,	/* NAC		*/
+	0x12,	/* LMD		*/
+	0xFF,	/* CYCT - NA	*/
+	0x22,	/* AE		*/
+	0x2C,	/* SOC(RSOC	*/
+	0xFF,	/* DCAP(ILMD) - NA */
+	0x24,	/* AP		*/
+};
+
 /* bq27200 registers */
 static __initdata u8 bq27200_regs[NUM_REGS] = {
 	0x00,	/* CONTROL	*/
@@ -198,7 +219,7 @@ struct bq27x00_device_info {
 	u8 regs[NUM_REGS];
 };
 
-static enum power_supply_property bq27x00_battery_props[] = {
+static __initdata enum power_supply_property bq27x00_battery_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
@@ -219,7 +240,26 @@ static enum power_supply_property bq27x00_battery_props[] = {
 	POWER_SUPPLY_PROP_HEALTH,
 };
 
-static enum power_supply_property bq274xx_battery_props[] = {
+static __initdata enum power_supply_property bq27520_battery_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW,
+	POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG,
+	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
+	POWER_SUPPLY_PROP_TECHNOLOGY,
+	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_NOW,
+	POWER_SUPPLY_PROP_ENERGY_NOW,
+	POWER_SUPPLY_PROP_POWER_AVG,
+	POWER_SUPPLY_PROP_HEALTH,
+};
+
+static __initdata enum power_supply_property bq274xx_battery_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
@@ -775,17 +815,35 @@ static void bq27x00_external_power_changed(struct power_supply *psy)
 	schedule_delayed_work(&di->work, 0);
 }
 
+static void set_properties_array(struct bq27x00_device_info *di,
+	enum power_supply_property *props, int num_props)
+{
+	int tot_sz = num_props * sizeof(enum power_supply_property);
+
+	di->bat.properties = devm_kzalloc(di->dev, tot_sz, GFP_KERNEL);
+
+	if (di->bat.properties) {
+		memcpy(di->bat.properties, props, tot_sz);
+		di->bat.num_properties = num_props;
+	} else {
+		di->bat.num_properties = 0;
+	}
+}
+
 static int bq27x00_powersupply_init(struct bq27x00_device_info *di)
 {
 	int ret;
 
 	di->bat.type = POWER_SUPPLY_TYPE_BATTERY;
 	if (di->chip == BQ274XX) {
-		di->bat.properties = bq274xx_battery_props;
-		di->bat.num_properties = ARRAY_SIZE(bq274xx_battery_props);
+		set_properties_array(di, bq274xx_battery_props,
+			ARRAY_SIZE(bq274xx_battery_props));
+	} else if (di->chip == BQ27520) {
+		set_properties_array(di, bq27520_battery_props,
+			ARRAY_SIZE(bq27520_battery_props));
 	} else {
-		di->bat.properties = bq27x00_battery_props;
-		di->bat.num_properties = ARRAY_SIZE(bq27x00_battery_props);
+		set_properties_array(di, bq27x00_battery_props,
+			ARRAY_SIZE(bq27x00_battery_props));
 	}
 	di->bat.get_property = bq27x00_battery_get_property;
 	di->bat.external_power_changed = bq27x00_external_power_changed;
@@ -1036,15 +1094,17 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 	di->bus.write = &bq27xxx_write_i2c;
 
 	if (di->chip == BQ27200)
-		di->regs = bq27200_regs;
-	else if (di->chip == BQ27500 || di->chip == BQ27520)
-		di->regs = bq275xx_regs;
+		regs = bq27200_regs;
+	else if (di->chip == BQ27500)
+		regs = bq27500_regs;
+	else if (di->chip == BQ27520)
+		regs = bq27520_regs;
 	else if (di->chip == BQ274XX)
-		di->regs = bq274xx_regs;
+		regs = bq274xx_regs;
 	else {
 		dev_err(&client->dev,
 			"Unexpected gas gague: %d\n", di->chip);
-		di->regs = bq275xx_regs;
+		regs = bq27520_regs;
 	}
 
 	memcpy(di->regs, regs, NUM_REGS);
