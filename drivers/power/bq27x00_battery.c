@@ -165,6 +165,8 @@ static __initdata u8 bq274xx_regs[NUM_REGS] = {
 #define BQ274XX_UNSEAL_KEY		0x80008000
 #define BQ274XX_SOFT_RESET		0x43
 
+#define BQ274XX_FLAG_ITPOR				0x20
+#define BQ274XX_CTRL_STATUS_INITCOMP	0x80
 
 #define BQ27XXX_FLAG_DSC		BIT(0)
 #define BQ27XXX_FLAG_SOCF		BIT(1) /* State-of-Charge threshold final */
@@ -219,6 +221,13 @@ struct bq27x00_reg_cache {
 	int health;
 };
 
+struct dm_reg {
+	u8 subclass;
+	u8 offset;
+	u8 len;
+	u32 data;
+};
+
 struct bq27x00_device_info {
 	struct device 		*dev;
 	int			id;
@@ -239,6 +248,8 @@ struct bq27x00_device_info {
 	int fw_ver;
 	int df_ver;
 	u8 regs[NUM_REGS];
+	struct dm_reg *dm_regs;
+	u16 dm_regs_count;
 };
 
 static __initdata enum power_supply_property bq27x00_battery_props[] = {
@@ -293,6 +304,20 @@ static __initdata enum power_supply_property bq274xx_battery_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+};
+
+/*
+ * Ordering the parameters based on subclass and then offset will help in
+ * having fewer flash writes while updating.
+ * Customize these values and, if necessary, add more based on system needs.
+ */
+static struct dm_reg bq274xx_dm_regs[] = {
+	{82, 0, 2, 1000},	/* Qmax */
+	{82, 5, 1, 0x81},	/* Load Select */
+	{82, 10, 2, 1340},	/* Design Capacity */
+	{82, 12, 2, 3700},	/* Design Energy */
+	{82, 16, 2, 3250},	/* Terminate Voltage */
+	{82, 27, 2, 110},	/* Taper rate */
 };
 
 static unsigned int poll_interval = 360;
@@ -849,10 +874,128 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 	di->last_update = jiffies;
 }
 
+static void copy_to_dm_buf_big_endian(struct bq27x00_device_info *di,
+	u8 *buf, u8 offset, u8 sz, u32 val)
+{
+	dev_dbg(di->dev, "%s: offset %d sz %d val %d\n",
+		__func__, offset, sz, val);
+
+	switch (sz) {
+	case 1:
+		buf[offset] = (u8) val;
+		break;
+	case 2:
+		put_unaligned_be16((u16) val, &buf[offset]);
+		break;
+	case 4:
+		put_unaligned_be32(val, &buf[offset]);
+		break;
+	default:
+		dev_err(di->dev, "%s: bad size for dm parameter - %d",
+			__func__, sz);
+		break;
+	}
+}
+
+static int rom_mode_gauge_init_completed(struct bq27x00_device_info *di)
+{
+	dev_dbg(di->dev, "%s:\n", __func__);
+
+	return control_cmd_read(di, CONTROL_STATUS_SUBCMD) &
+		BQ274XX_CTRL_STATUS_INITCOMP;
+}
+
+static bool rom_mode_gauge_dm_initialized(struct bq27x00_device_info *di)
+{
+	u16 flags;
+
+	flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, false);
+
+	dev_dbg(di->dev, "%s: flags - 0x%04x\n", __func__, flags);
+
+	if (flags & BQ274XX_FLAG_ITPOR)
+		return false;
+	else
+		return true;
+}
+
+#define INITCOMP_TIMEOUT_MS		10000
+static void rom_mode_gauge_dm_init(struct bq27x00_device_info *di)
+{
+	int i;
+	int timeout = INITCOMP_TIMEOUT_MS;
+	u8 subclass, offset;
+	u32 blk_number;
+	u32 blk_number_prev = 0;
+	u8 buf[32];
+	bool buf_valid = false;
+	struct dm_reg *dm_reg;
+
+	dev_dbg(di->dev, "%s:\n", __func__);
+
+	while (!rom_mode_gauge_init_completed(di) && timeout > 0) {
+		msleep(100);
+		timeout -= 100;
+	}
+
+	if (timeout <= 0) {
+		dev_err(di->dev, "%s: INITCOMP not set after %d seconds\n",
+			__func__, INITCOMP_TIMEOUT_MS/100);
+		return;
+	}
+
+	if (!di->dm_regs || !di->dm_regs_count) {
+		dev_err(di->dev, "%s: Data not available for DM initialization\n",
+			__func__);
+		return;
+	}
+
+	enter_cfg_update_mode(di);
+	for (i = 0; i < di->dm_regs_count; i++) {
+		dm_reg = &di->dm_regs[i];
+		subclass = dm_reg->subclass;
+		offset = dm_reg->offset;
+
+		/*
+		 * Create a composite block number to see if the subsequent
+		 * register also belongs to the same 32 btye block in the DM
+		 */
+		blk_number = subclass << 8;
+		blk_number |= offset >> 5;
+
+		if (blk_number == blk_number_prev) {
+			copy_to_dm_buf_big_endian(di, buf, offset,
+				dm_reg->len, dm_reg->data);
+		} else {
+
+			if (buf_valid)
+				update_dm_block(di, blk_number_prev >> 8,
+					(blk_number_prev << 5) & 0xFF , buf);
+			else
+				buf_valid = true;
+
+			read_dm_block(di, dm_reg->subclass, dm_reg->offset,
+				buf);
+			copy_to_dm_buf_big_endian(di, buf, offset,
+				dm_reg->len, dm_reg->data);
+		}
+		blk_number_prev = blk_number;
+	}
+
+	/* Last buffer to be written */
+	if (buf_valid)
+		update_dm_block(di, subclass, offset, buf);
+
+	exit_cfg_update_mode(di);
+}
+
 static void bq27x00_battery_poll(struct work_struct *work)
 {
 	struct bq27x00_device_info *di =
 		container_of(work, struct bq27x00_device_info, work.work);
+
+	if (di->chip == BQ274XX && !rom_mode_gauge_dm_initialized(di))
+		rom_mode_gauge_dm_init(di);
 
 	bq27x00_update(di);
 
@@ -1409,6 +1552,8 @@ static int __init bq27x00_battery_probe(struct i2c_client *client,
 	di->bus.write = &bq27xxx_write_i2c;
 	di->bus.blk_read = bq27xxx_read_i2c_blk;
 	di->bus.blk_write = bq27xxx_write_i2c_blk;
+	di->dm_regs = NULL;
+	di->dm_regs_count = 0;
 
 	if (di->chip == BQ27200)
 		regs = bq27200_regs;
@@ -1416,9 +1561,11 @@ static int __init bq27x00_battery_probe(struct i2c_client *client,
 		regs = bq27500_regs;
 	else if (di->chip == BQ27520)
 		regs = bq27520_regs;
-	else if (di->chip == BQ274XX)
+	else if (di->chip == BQ274XX) {
 		regs = bq274xx_regs;
-	else {
+		di->dm_regs = bq274xx_dm_regs;
+		di->dm_regs_count = ARRAY_SIZE(bq274xx_dm_regs);
+	} else {
 		dev_err(&client->dev,
 			"Unexpected gas gague: %d\n", di->chip);
 		regs = bq27520_regs;
@@ -1432,6 +1579,9 @@ static int __init bq27x00_battery_probe(struct i2c_client *client,
 	retval = bq27x00_powersupply_init(di);
 	if (retval)
 		goto batt_failed_3;
+
+	/* Schedule a polling after about 1 min */
+	schedule_delayed_work(&di->work, 60 * HZ);
 
 	i2c_set_clientdata(client, di);
 	retval = sysfs_create_group(&client->dev.kobj, &bq27x00_attr_group);
