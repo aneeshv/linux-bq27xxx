@@ -151,6 +151,21 @@ static __initdata u8 bq274xx_regs[NUM_REGS] = {
 	0x18,	/* AP		*/
 };
 
+/*
+ * SBS Commands for DF access - these are pretty standard
+ * So, no need to go in the command array
+ */
+#define BLOCK_DATA_CLASS		0x3E
+#define DATA_BLOCK			0x3F
+#define BLOCK_DATA			0x40
+#define BLOCK_DATA_CHECKSUM		0x60
+#define BLOCK_DATA_CONTROL		0x61
+
+/* bq274xx specific command information */
+#define BQ274XX_UNSEAL_KEY		0x80008000
+#define BQ274XX_SOFT_RESET		0x43
+
+
 #define BQ27XXX_FLAG_DSC		BIT(0)
 #define BQ27XXX_FLAG_SOCF		BIT(1) /* State-of-Charge threshold final */
 #define BQ27XXX_FLAG_SOC1		BIT(2) /* State-of-Charge threshold 1 */
@@ -169,16 +184,23 @@ static __initdata u8 bq274xx_regs[NUM_REGS] = {
 #define BQ27200_POWER_CONSTANT		(256 * 29200 / 1000)
 
 /* Subcommands of Control() */
+#define CONTROL_STATUS_SUBCMD		0x0000
 #define DEV_TYPE_SUBCMD			0x0001
 #define FW_VER_SUBCMD			0x0002
 #define DF_VER_SUBCMD			0x001F
 #define RESET_SUBCMD			0x0041
+#define SET_CFGUPDATE_SUBCMD		0x0013
+#define SEAL_SUBCMD			0x0020
 
 struct bq27x00_device_info;
 struct bq27x00_access_methods {
 	int (*read)(struct bq27x00_device_info *di, u8 reg, bool single);
 	int (*write)(struct bq27x00_device_info *di, u8 reg, int value,
 			bool single);
+	int (*blk_read)(struct bq27x00_device_info *di, u8 reg, u8 *data,
+		u8 sz);
+	int (*blk_write)(struct bq27x00_device_info *di, u8 reg, u8 *data,
+		u8 sz);
 };
 
 enum bq27x00_chip { BQ27200, BQ27500, BQ27520, BQ274XX};
@@ -303,6 +325,246 @@ static inline int bq27xxx_write(struct bq27x00_device_info *di, int reg_index,
 		return -1;
 
 	return di->bus.write(di, di->regs[reg_index], value, single);
+}
+
+static int control_cmd_wr(struct bq27x00_device_info *di, u16 cmd)
+{
+	dev_dbg(di->dev, "%s: cmd - %04x\n", __func__, cmd);
+
+	return di->bus.write(di, BQ27XXX_REG_CTRL, cmd, false);
+}
+
+static int control_cmd_read(struct bq27x00_device_info *di, u16 cmd)
+{
+	dev_dbg(di->dev, "%s: cmd - %04x\n", __func__, cmd);
+
+	di->bus.write(di, BQ27XXX_REG_CTRL, cmd, false);
+
+	msleep(5);
+
+	return di->bus.read(di, BQ27XXX_REG_CTRL, false);
+}
+
+#define SEAL_UNSEAL_POLLING_RETRY_LIMIT	1000
+
+static inline int sealed(struct bq27x00_device_info *di)
+{
+	return control_cmd_read(di, CONTROL_STATUS_SUBCMD) & (1 << 13);
+}
+
+static int unseal(struct bq27x00_device_info *di, u32 key)
+{
+	int i = 0;
+
+	dev_dbg(di->dev, "%s: key - %08x\n", __func__, key);
+
+	if (!sealed(di))
+		goto out;
+
+	di->bus.write(di, BQ27XXX_REG_CTRL, key & 0xFFFF, false);
+	msleep(5);
+	di->bus.write(di, BQ27XXX_REG_CTRL, (key & 0xFFFF0000) >> 16, false);
+	msleep(5);
+
+	while (i < SEAL_UNSEAL_POLLING_RETRY_LIMIT) {
+		i++;
+		if (!sealed(di))
+			break;
+		msleep(10);
+	}
+
+out:
+	if (i == SEAL_UNSEAL_POLLING_RETRY_LIMIT) {
+		dev_err(di->dev, "%s: failed\n", __func__);
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+static int seal(struct bq27x00_device_info *di)
+{
+	int i = 0;
+
+	dev_dbg(di->dev, "%s:\n", __func__);
+
+	if (sealed(di))
+		goto out;
+
+	di->bus.write(di, BQ27XXX_REG_CTRL, SEAL_SUBCMD, false);
+
+	while (i < SEAL_UNSEAL_POLLING_RETRY_LIMIT) {
+		i++;
+		if (sealed(di))
+			break;
+		msleep(10);
+	}
+
+out:
+	if (i == SEAL_UNSEAL_POLLING_RETRY_LIMIT) {
+		dev_err(di->dev, "%s: failed\n", __func__);
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+#define CFG_UPDATE_POLLING_RETRY_LIMIT 50
+static int enter_cfg_update_mode(struct bq27x00_device_info *di)
+{
+	int i = 0;
+	u16 flags;
+
+	dev_dbg(di->dev, "%s:\n", __func__);
+
+	if (!unseal(di, BQ274XX_UNSEAL_KEY))
+		return 0;
+
+	control_cmd_wr(di, SET_CFGUPDATE_SUBCMD);
+	msleep(5);
+
+	while (i < CFG_UPDATE_POLLING_RETRY_LIMIT) {
+		i++;
+		flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, false);
+		if (flags & (1 << 4))
+			break;
+		msleep(100);
+	}
+
+	if (i == CFG_UPDATE_POLLING_RETRY_LIMIT) {
+		dev_err(di->dev, "%s: failed %04x\n", __func__, flags);
+		return 0;
+	}
+
+	return 1;
+}
+
+static int exit_cfg_update_mode(struct bq27x00_device_info *di)
+{
+	int i = 0;
+	u16 flags;
+
+	dev_dbg(di->dev, "%s:\n", __func__);
+
+	control_cmd_wr(di, BQ274XX_SOFT_RESET);
+
+	while (i < CFG_UPDATE_POLLING_RETRY_LIMIT) {
+		i++;
+		flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, false);
+		if (!(flags & (1 << 4)))
+			break;
+		msleep(100);
+	}
+
+	if (i == CFG_UPDATE_POLLING_RETRY_LIMIT) {
+		dev_err(di->dev, "%s: failed %04x\n", __func__, flags);
+		return 0;
+	}
+
+	if (seal(di))
+		return 1;
+	else
+		return 0;
+}
+static u8 checksum(u8 *data)
+{
+	u16 sum = 0;
+	int i;
+
+	for (i = 0; i < 32; i++)
+		sum += data[i];
+
+	sum &= 0xFF;
+
+	return 0xFF - sum;
+}
+
+#ifdef DEBUG
+static void print_buf(const char *msg, u8 *buf)
+{
+	int i;
+
+	printk("\nbq: %s buf: ", msg);
+	for (i = 0; i < 32; i++)
+		printk("%02x ", buf[i]);
+
+	printk("\n");
+}
+#else
+#define print_buf(a, b)
+#endif
+
+static int update_dm_block(struct bq27x00_device_info *di, u8 subclass,
+	u8 offset, u8 *data)
+{
+	u8 buf[32];
+	u8 cksum;
+	u8 blk_offset = offset >> 5;
+
+	dev_dbg(di->dev, "%s: subclass %d offset %d\n",
+		__func__, subclass, offset);
+
+	di->bus.write(di, BLOCK_DATA_CONTROL, 0, true);
+	msleep(5);
+
+	di->bus.write(di, BLOCK_DATA_CLASS, subclass, true);
+	msleep(5);
+
+	di->bus.write(di, DATA_BLOCK, blk_offset, true);
+	msleep(5);
+
+	di->bus.blk_write(di, BLOCK_DATA, data, 32);
+	msleep(5);
+	print_buf(__func__, data);
+
+	cksum = checksum(data);
+	di->bus.write(di, BLOCK_DATA_CHECKSUM, cksum, true);
+	msleep(5);
+
+	/* Read back and compare to make sure write is successful */
+	di->bus.write(di, DATA_BLOCK, blk_offset, true);
+	msleep(5);
+	di->bus.blk_read(di, BLOCK_DATA, buf, 32);
+	if (memcmp(data, buf, 32)) {
+		dev_err(di->dev, "%s: error updating subclass %d offset %d\n",
+			__func__, subclass, offset);
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+static int read_dm_block(struct bq27x00_device_info *di, u8 subclass,
+	u8 offset, u8 *data)
+{
+	u8 cksum_calc, cksum;
+	u8 blk_offset = offset >> 5;
+
+	dev_dbg(di->dev, "%s: subclass %d offset %d\n",
+		__func__, subclass, offset);
+
+	di->bus.write(di, BLOCK_DATA_CONTROL, 0, true);
+	msleep(5);
+
+	di->bus.write(di, BLOCK_DATA_CLASS, subclass, true);
+	msleep(5);
+
+	di->bus.write(di, DATA_BLOCK, blk_offset, true);
+	msleep(5);
+
+	di->bus.blk_read(di, BLOCK_DATA, data, 32);
+
+	cksum_calc = checksum(data);
+	cksum = di->bus.read(di, BLOCK_DATA_CHECKSUM, true);
+	if (cksum != cksum_calc) {
+		dev_err(di->dev, "%s: error reading subclass %d offset %d\n",
+			__func__, subclass, offset);
+		return 0;
+	}
+
+	print_buf(__func__, data);
+
+	return 1;
 }
 
 /*
@@ -955,6 +1217,59 @@ static int bq27xxx_write_i2c(struct bq27x00_device_info *di, u8 reg, int value, 
 	return 0;
 }
 
+static int bq27xxx_read_i2c_blk(struct bq27x00_device_info *di, u8 reg,
+	u8 *data, u8 len)
+{
+	struct i2c_client *client = to_i2c_client(di->dev);
+	struct i2c_msg msg[2];
+	int ret;
+
+	if (!client->adapter)
+		return -ENODEV;
+
+	msg[0].addr = client->addr;
+	msg[0].flags = 0;
+	msg[0].buf = &reg;
+	msg[0].len = 1;
+
+	msg[1].addr = client->addr;
+	msg[1].flags = I2C_M_RD;
+	msg[1].buf = data;
+	msg[1].len = len;
+
+	ret = i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg));
+	if (ret < 0)
+		return ret;
+
+	return ret;
+}
+
+static int bq27xxx_write_i2c_blk(struct bq27x00_device_info *di, u8 reg,
+	u8 *data, u8 sz)
+{
+	struct i2c_client *client = to_i2c_client(di->dev);
+	struct i2c_msg msg;
+	int ret;
+	u8 buf[33];
+
+	if (!client->adapter)
+		return -ENODEV;
+
+	buf[0] = reg;
+	memcpy(&buf[1], data, sz);
+
+	msg.buf = buf;
+	msg.addr = client->addr;
+	msg.flags = 0;
+	msg.len = sz + 1;
+
+	ret = i2c_transfer(client->adapter, &msg, 1);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
 static int bq27x00_battery_reset(struct bq27x00_device_info *di)
 {
 	dev_info(di->dev, "Gas Gauge Reset\n");
@@ -1092,6 +1407,8 @@ static int __init bq27x00_battery_probe(struct i2c_client *client,
 	di->bat.name = name;
 	di->bus.read = &bq27xxx_read_i2c;
 	di->bus.write = &bq27xxx_write_i2c;
+	di->bus.blk_read = bq27xxx_read_i2c_blk;
+	di->bus.blk_write = bq27xxx_write_i2c_blk;
 
 	if (di->chip == BQ27200)
 		regs = bq27200_regs;
