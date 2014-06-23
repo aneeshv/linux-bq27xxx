@@ -151,6 +151,27 @@ static __initdata u8 bq274xx_regs[NUM_REGS] = {
 	0x18,	/* AP		*/
 };
 
+/* bq276xx registers - same as bq274xx except CYCT */
+static __initdata u8 bq276xx_regs[NUM_REGS] = {
+	0x00,	/* CONTROL	*/
+	0x02,	/* TEMP		*/
+	0x1e,	/* INT TEMP	*/
+	0x04,	/* VOLT		*/
+	0x10,	/* AVG CURR	*/
+	0x06,	/* FLAGS	*/
+	0xFF,	/* TTE - NA	*/
+	0xFF,	/* TTF - NA	*/
+	0xFF,	/* TTES - NA	*/
+	0xFF,	/* TTECP - NA	*/
+	0x08,	/* NAC		*/
+	0x0E,	/* FCC		*/
+	0x22,	/* CYCT		*/
+	0xFF,	/* AE - NA	*/
+	0x1C,	/* SOC		*/
+	0x3C,	/* DCAP - NA	*/
+	0x18,	/* AP		*/
+};
+
 /*
  * SBS Commands for DF access - these are pretty standard
  * So, no need to go in the command array
@@ -161,7 +182,7 @@ static __initdata u8 bq274xx_regs[NUM_REGS] = {
 #define BLOCK_DATA_CHECKSUM		0x60
 #define BLOCK_DATA_CONTROL		0x61
 
-/* bq274xx specific command information */
+/* bq274xx/bq276xx specific command information */
 #define BQ274XX_UNSEAL_KEY		0x80008000
 #define BQ274XX_SOFT_RESET		0x43
 
@@ -194,6 +215,11 @@ static __initdata u8 bq274xx_regs[NUM_REGS] = {
 #define SET_CFGUPDATE_SUBCMD		0x0013
 #define SEAL_SUBCMD			0x0020
 
+/* Location of SEAL enable bit in bq276xx DM */
+#define BQ276XX_OP_CFG_B_SUBCLASS	64
+#define BQ276XX_OP_CFG_B_OFFSET		2
+#define BQ276XX_OP_CFG_B_DEF_SEAL_BIT	(1 << 5)
+
 struct bq27x00_device_info;
 struct bq27x00_access_methods {
 	int (*read)(struct bq27x00_device_info *di, u8 reg, bool single);
@@ -205,7 +231,7 @@ struct bq27x00_access_methods {
 		u8 sz);
 };
 
-enum bq27x00_chip { BQ27200, BQ27500, BQ27520, BQ274XX};
+enum bq27x00_chip { BQ27200, BQ27500, BQ27520, BQ274XX, BQ276XX};
 
 struct bq27x00_reg_cache {
 	int temperature;
@@ -306,6 +332,21 @@ static __initdata enum power_supply_property bq274xx_battery_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 };
 
+static __initdata enum power_supply_property bq276xx_battery_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_TECHNOLOGY,
+	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_NOW,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CYCLE_COUNT,
+};
+
 /*
  * Ordering the parameters based on subclass and then offset will help in
  * having fewer flash writes while updating.
@@ -320,10 +361,27 @@ static struct dm_reg bq274xx_dm_regs[] = {
 	{82, 27, 2, 110},	/* Taper rate */
 };
 
+static struct dm_reg bq276xx_dm_regs[] = {
+	{64, 2, 1, 0x2C},	/* Op Config B */
+	{82, 0, 2, 1000},	/* Qmax */
+	{82, 2, 1, 0x81},	/* Load Select */
+	{82, 3, 2, 1340},	/* Design Capacity */
+	{82, 5, 2, 3700},	/* Design Energy */
+	{82, 9, 2, 3250},	/* Terminate Voltage */
+	{82, 20, 2, 110},	/* Taper rate */
+};
+
 static unsigned int poll_interval = 360;
 module_param(poll_interval, uint, 0644);
 MODULE_PARM_DESC(poll_interval, "battery poll interval in seconds - " \
 				"0 disables polling");
+
+/*
+ * Forward Declarations
+ */
+static int read_dm_block(struct bq27x00_device_info *di, u8 subclass,
+	u8 offset, u8 *data);
+
 
 /*
  * Common code for BQ27x00 devices
@@ -369,6 +427,27 @@ static int control_cmd_read(struct bq27x00_device_info *di, u16 cmd)
 
 	return di->bus.read(di, BQ27XXX_REG_CTRL, false);
 }
+/*
+ * It is assumed that the gauge is in unsealed mode when this function
+ * is called
+ */
+static int bq276xx_seal_enabled(struct bq27x00_device_info *di)
+{
+	u8 buf[32];
+	u8 op_cfg_b;
+
+	if (!read_dm_block(di, BQ276XX_OP_CFG_B_SUBCLASS,
+		BQ276XX_OP_CFG_B_OFFSET, buf)) {
+		return 1; /* Err on the side of caution and try to seal */
+	}
+
+	op_cfg_b = buf[BQ276XX_OP_CFG_B_OFFSET & 0x1F];
+
+	if (op_cfg_b & BQ276XX_OP_CFG_B_DEF_SEAL_BIT)
+		return 1;
+
+	return 0;
+}
 
 #define SEAL_UNSEAL_POLLING_RETRY_LIMIT	1000
 
@@ -410,28 +489,33 @@ out:
 static int seal(struct bq27x00_device_info *di)
 {
 	int i = 0;
+	int is_sealed;
 
 	dev_dbg(di->dev, "%s:\n", __func__);
 
-	if (sealed(di))
-		goto out;
+	is_sealed = sealed(di);
+	if (is_sealed)
+		return is_sealed;
+
+	if (di->chip == BQ276XX && !bq276xx_seal_enabled(di)) {
+		dev_dbg(di->dev, "%s: sealing is not enabled\n", __func__);
+		return is_sealed;
+	}
 
 	di->bus.write(di, BQ27XXX_REG_CTRL, SEAL_SUBCMD, false);
 
 	while (i < SEAL_UNSEAL_POLLING_RETRY_LIMIT) {
 		i++;
-		if (sealed(di))
+		is_sealed = sealed(di);
+		if (is_sealed)
 			break;
 		msleep(10);
 	}
 
-out:
-	if (i == SEAL_UNSEAL_POLLING_RETRY_LIMIT) {
+	if (!is_sealed)
 		dev_err(di->dev, "%s: failed\n", __func__);
-		return 0;
-	} else {
-		return 1;
-	}
+
+	return is_sealed;
 }
 
 #define CFG_UPDATE_POLLING_RETRY_LIMIT 50
@@ -826,6 +910,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 	bool is_bq27200 = di->chip == BQ27200;
 	bool is_bq27500 = di->chip == BQ27500;
 	bool is_bq274xx = di->chip == BQ274XX;
+	bool is_bq276xx = di->chip == BQ276XX;
 
 	cache.flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, !is_bq27500);
 	if (cache.flags >= 0) {
@@ -840,7 +925,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			cache.health = -ENODATA;
 		} else {
 			cache.capacity = bq27x00_battery_read_soc(di);
-			if (!is_bq274xx) {
+			if (!(is_bq274xx || is_bq276xx)) {
 				cache.energy = bq27x00_battery_read_energy(di);
 				cache.time_to_empty =
 					bq27x00_battery_read_time(di,
@@ -994,8 +1079,10 @@ static void bq27x00_battery_poll(struct work_struct *work)
 	struct bq27x00_device_info *di =
 		container_of(work, struct bq27x00_device_info, work.work);
 
-	if (di->chip == BQ274XX && !rom_mode_gauge_dm_initialized(di))
+	if (((di->chip == BQ274XX) || (di->chip == BQ276XX)) &&
+		!rom_mode_gauge_dm_initialized(di)) {
 		rom_mode_gauge_dm_init(di);
+	}
 
 	bq27x00_update(di);
 
@@ -1243,6 +1330,9 @@ static int __init bq27x00_powersupply_init(struct bq27x00_device_info *di)
 	if (di->chip == BQ274XX) {
 		set_properties_array(di, bq274xx_battery_props,
 			ARRAY_SIZE(bq274xx_battery_props));
+	} else if (di->chip == BQ276XX) {
+		set_properties_array(di, bq276xx_battery_props,
+			ARRAY_SIZE(bq276xx_battery_props));
 	} else if (di->chip == BQ27520) {
 		set_properties_array(di, bq27520_battery_props,
 			ARRAY_SIZE(bq27520_battery_props));
@@ -1565,6 +1655,11 @@ static int __init bq27x00_battery_probe(struct i2c_client *client,
 		regs = bq274xx_regs;
 		di->dm_regs = bq274xx_dm_regs;
 		di->dm_regs_count = ARRAY_SIZE(bq274xx_dm_regs);
+	} else if (di->chip == BQ276XX) {
+		/* commands are same as bq274xx, only DM is different */
+		regs = bq276xx_regs;
+		di->dm_regs = bq276xx_dm_regs;
+		di->dm_regs_count = ARRAY_SIZE(bq276xx_dm_regs);
 	} else {
 		dev_err(&client->dev,
 			"Unexpected gas gague: %d\n", di->chip);
@@ -1624,6 +1719,7 @@ static const struct i2c_device_id bq27x00_id[] = {
 	{ "bq27500", BQ27500 },
 	{ "bq27520", BQ27520 },
 	{ "bq274xx", BQ274XX },
+	{ "bq276xx", BQ276XX },
 	{},
 };
 MODULE_DEVICE_TABLE(i2c, bq27x00_id);
