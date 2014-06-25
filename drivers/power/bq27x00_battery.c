@@ -109,6 +109,27 @@ static __initdata u8 bq27520_regs[] = {
 	0x24,	/* AP		*/
 };
 
+/* bq2753x registers */
+static __initdata u8 bq2753x_regs[] = {
+	0x00,	/* CONTROL	*/
+	0x06,	/* TEMP		*/
+	0xFF,	/* INT TEMP - NA*/
+	0x08,	/* VOLT		*/
+	0x14,	/* AVG CURR	*/
+	0x0A,	/* FLAGS	*/
+	0x16,	/* TTE		*/
+	0xFF,	/* TTF - NA	*/
+	0xFF,	/* TTES - NA	*/
+	0xFF,	/* TTECP - NA	*/
+	0x0C,	/* NAC		*/
+	0x12,	/* LMD(FCC)	*/
+	0x2A,	/* CYCT		*/
+	0xFF,	/* AE - NA	*/
+	0x2C,	/* SOC(RSOC)	*/
+	0xFF,	/* DCAP(ILMD) - NA */
+	0x24,	/* AP		*/
+};
+
 /* bq27200 registers */
 static __initdata u8 bq27200_regs[NUM_REGS] = {
 	0x00,	/* CONTROL	*/
@@ -231,7 +252,7 @@ struct bq27x00_access_methods {
 		u8 sz);
 };
 
-enum bq27x00_chip { BQ27200, BQ27500, BQ27520, BQ274XX, BQ276XX};
+enum bq27x00_chip { BQ27200, BQ27500, BQ27520, BQ274XX, BQ276XX, BQ2753X};
 
 struct bq27x00_reg_cache {
 	int temperature;
@@ -316,6 +337,23 @@ static __initdata enum power_supply_property bq27520_battery_props[] = {
 	POWER_SUPPLY_PROP_ENERGY_NOW,
 	POWER_SUPPLY_PROP_POWER_AVG,
 	POWER_SUPPLY_PROP_HEALTH,
+};
+
+static __initdata enum power_supply_property bq2753x_battery_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW,
+	POWER_SUPPLY_PROP_TECHNOLOGY,
+	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_NOW,
+	POWER_SUPPLY_PROP_POWER_AVG,
+	POWER_SUPPLY_PROP_HEALTH,
+	POWER_SUPPLY_PROP_CYCLE_COUNT,
 };
 
 static __initdata enum power_supply_property bq274xx_battery_props[] = {
@@ -1336,6 +1374,9 @@ static int __init bq27x00_powersupply_init(struct bq27x00_device_info *di)
 	} else if (di->chip == BQ27520) {
 		set_properties_array(di, bq27520_battery_props,
 			ARRAY_SIZE(bq27520_battery_props));
+	} else if (di->chip == BQ2753X) {
+		set_properties_array(di, bq2753x_battery_props,
+			ARRAY_SIZE(bq2753x_battery_props));
 	} else {
 		set_properties_array(di, bq27x00_battery_props,
 			ARRAY_SIZE(bq27x00_battery_props));
@@ -1651,6 +1692,8 @@ static int __init bq27x00_battery_probe(struct i2c_client *client,
 		regs = bq27500_regs;
 	else if (di->chip == BQ27520)
 		regs = bq27520_regs;
+	else if (di->chip == BQ2753X)
+		regs = bq2753x_regs;
 	else if (di->chip == BQ274XX) {
 		regs = bq274xx_regs;
 		di->dm_regs = bq274xx_dm_regs;
@@ -1720,6 +1763,7 @@ static const struct i2c_device_id bq27x00_id[] = {
 	{ "bq27520", BQ27520 },
 	{ "bq274xx", BQ274XX },
 	{ "bq276xx", BQ276XX },
+	{ "bq2753x", BQ2753X },
 	{},
 };
 MODULE_DEVICE_TABLE(i2c, bq27x00_id);
